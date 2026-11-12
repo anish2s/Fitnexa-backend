@@ -1,0 +1,15 @@
+name: api
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck -w @gym/api
+      - run: npm run lint -w @gym/api
+      # REQUIRE_DB=1: a missing MongoDB must fail CI, never silently skip isolation tests.
+      - run: npm test -w @gym/api
+        env: { REQUIRE_DB: '1' }

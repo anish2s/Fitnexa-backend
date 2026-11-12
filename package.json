@@ -1,0 +1,11 @@
+{
+  "name": "gym-saas",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:api": "npm run dev -w @gym/api",
+    "test": "npm test -w @gym/api",
+    "lint": "npm run lint -w @gym/api"
+  },
+  "engines": { "node": ">=20" }
+}
