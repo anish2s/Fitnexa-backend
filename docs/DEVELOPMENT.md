@@ -1,7 +1,8 @@
 # Development
 
 ## Prerequisites
-- Node.js 22 (`.nvmrc`), npm 10
+- Node.js 22 (`.nvmrc`), npm 10. With nvm, run `nvm use` in the repo root to switch this shell to 22
+  without changing your global default.
 - MongoDB for running the API locally: either MongoDB Atlas (free M0) or a local `mongod` started as a
   single-node replica set (needed later for transactions):
   ```bash
