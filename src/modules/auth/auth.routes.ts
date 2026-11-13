@@ -2,11 +2,12 @@ import { Router, type RequestHandler } from 'express';
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import type { Env } from '../../config/env.js';
 import type { JwtConfig } from '../../auth/jwt.js';
-import { authenticate } from '../../middleware/authenticate.js';
+import { authenticate, notWhileImpersonating } from '../../middleware/authenticate.js';
 import { sameOriginOnly } from '../../middleware/same-origin.js';
 import { validate } from '../../middleware/validate.js';
 import { createAuthController } from './auth.controller.js';
 import * as s from './auth.schemas.js';
+import type { AuditService } from '../audit/audit.service.js';
 import type { AuthService } from './auth.service.js';
 
 /**
@@ -16,9 +17,14 @@ import type { AuthService } from './auth.service.js';
  * On the platform host (admin.yourapp.in): super admins (password). Email-link and reset
  * endpoints exist only on gym hosts.
  */
-export function authRouter(deps: { env: Env; jwt: JwtConfig; auth: AuthService }) {
+export function authRouter(deps: {
+  env: Env;
+  jwt: JwtConfig;
+  auth: AuthService;
+  audit: AuditService;
+}) {
   const { env } = deps;
-  const c = createAuthController(env, deps.auth);
+  const c = createAuthController(env, deps.auth, deps.audit);
   const router = Router();
   const requireAuth = authenticate(deps.jwt);
   const sameOrigin = sameOriginOnly(env.CORS_ORIGINS);
@@ -89,19 +95,22 @@ export function authRouter(deps: { env: Env; jwt: JwtConfig; auth: AuthService }
   router.post(
     '/password/change',
     requireAuth,
+    notWhileImpersonating,
     validate({ body: s.changePasswordBody }),
     c.changePassword,
   );
 
   router.post('/refresh', sameOrigin, c.refresh);
   router.post('/logout', sameOrigin, c.logout);
-  router.post('/logout-all', requireAuth, c.logoutAll);
+  router.post('/logout-all', requireAuth, notWhileImpersonating, c.logoutAll);
+  router.post('/impersonation/end', requireAuth, c.endImpersonation);
 
   router.get('/me', requireAuth, c.me);
   router.get('/sessions', requireAuth, c.listSessions);
   router.delete(
     '/sessions/:id',
     requireAuth,
+    notWhileImpersonating,
     validate({ params: s.sessionIdParams }),
     c.revokeSession,
   );

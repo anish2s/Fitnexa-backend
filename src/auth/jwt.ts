@@ -9,9 +9,17 @@ import { SignJWT, jwtVerify, errors as joseErrors } from 'jose';
  *   typ  'tenant' | 'platform'
  *   tid  gym id (tenant tokens only): must equal the gym resolved from the request host
  *   role owner | staff | member | super_admin
+ *   imp  super admin id, only on "log in as owner" tokens (tenant tokens, never refreshable)
  */
 export type AccessClaims =
-  | { typ: 'tenant'; sub: string; sid: string; tid: string; role: 'owner' | 'staff' | 'member' }
+  | {
+      typ: 'tenant';
+      sub: string;
+      sid: string;
+      tid: string;
+      role: 'owner' | 'staff' | 'member';
+      imp?: string;
+    }
   | { typ: 'platform'; sub: string; sid: string; role: 'super_admin' };
 
 const AUDIENCE = 'gym-saas';
@@ -59,16 +67,18 @@ export async function verifyAccessToken(cfg: JwtConfig, token: string): Promise<
       audience: AUDIENCE,
       clockTolerance: 5,
     });
-    const { sub, sid, typ, tid, role } = payload as Record<string, unknown>;
+    const { sub, sid, typ, tid, role, imp } = payload as Record<string, unknown>;
     if (typeof sub !== 'string' || typeof sid !== 'string') throw new InvalidTokenError('invalid');
     if (
       typ === 'tenant' &&
       typeof tid === 'string' &&
       (role === 'owner' || role === 'staff' || role === 'member')
     ) {
-      return { typ, sub, sid, tid, role };
+      if (imp === undefined) return { typ, sub, sid, tid, role };
+      if (typeof imp === 'string' && role === 'owner') return { typ, sub, sid, tid, role, imp };
+      throw new InvalidTokenError('invalid');
     }
-    if (typ === 'platform' && role === 'super_admin' && tid === undefined) {
+    if (typ === 'platform' && role === 'super_admin' && tid === undefined && imp === undefined) {
       return { typ, sub, sid, role };
     }
     throw new InvalidTokenError('invalid');

@@ -108,8 +108,9 @@ platform host.
 | `POST /auth/refresh` | cookie | — | new session + rotated cookie |
 | `POST /auth/logout` | cookie | — | `204`, cookie cleared, session ended |
 | `POST /auth/logout-all` | Bearer | — | `204`, every device signed out |
-| `GET /auth/me` | Bearer | — | `{ user, scope: "tenant"|"platform", gym: { name, slug } | null }` |
-| `GET /auth/sessions` | Bearer | — | my active devices `[{ id, current, createdAt, lastUsedAt, userAgent, ip }]` |
+| `GET /auth/me` | Bearer | — | `{ user, scope: "tenant"|"platform", gym: { name, slug } | null, impersonatedBy: { id, name } | null }` |
+| `GET /auth/sessions` | Bearer | — | my active devices `[{ id, current, impersonated, createdAt, lastUsedAt, userAgent, ip }]` |
+| `POST /auth/impersonation/end` | Bearer (impersonation) | — | `204`, ends the "log in as owner" session. `400` on a normal session. |
 | `DELETE /auth/sessions/:id` | Bearer | — | `204` (own sessions only; others → `404`) |
 
 Rate limits on login / email-link / forgot / reset: 10 attempts per IP + gym + account and
@@ -118,3 +119,61 @@ Rate limits on login / email-link / forgot / reset: 10 attempts per IP + gym + a
 
 Cookie-based endpoints (`/refresh`, `/logout`) reject requests whose `Origin` is a different host
 (`403 CROSS_ORIGIN_REJECTED`).
+
+While signed in as the owner from the platform, `password/change`, `logout-all` and
+`DELETE /sessions/:id` return `403`: a super admin can't change the owner's credentials or sign the
+owner out.
+
+## Gym settings — `/api/v1/gym` (gym host)
+
+Always the host's gym; the body can't name another one.
+
+| Method & path | Permission | Body | Result |
+|---|---|---|---|
+| `GET /gym` | `gym:read` (owner, staff) | — | gym view (below) |
+| `PATCH /gym` | `gym:update` (owner) | any of `name, email, phone, address{…}, settings{timezone, gstin, receiptPrefix, renewalReminderDays}` | gym view |
+| `PATCH /gym/branding` | `branding:update` (owner) | any of `logoUrl, appIconUrl` (https only), `primaryColor, secondaryColor` (`#RRGGBB`), `defaultTheme` (`dark`/`light`/`system`) | gym view |
+
+Patches merge: sending `settings.timezone` leaves the other settings alone. `null` clears an optional
+field. An empty body is `422`.
+
+Gym view: `{ id, name, slug, status, email, phone, customDomain, customDomainVerified, address{…},
+settings{…}, branding{…}, subscription{ status, planCode, priceMonthlyPaise, currentPeriodEnd },
+suspendedAt, suspendedReason, createdAt, updatedAt }`. Money in integer paise.
+
+## Audit log — `/api/v1/audit-logs` (gym host)
+
+`GET /audit-logs?page&limit&action&actorId&from&to` · permission `audit:read` (owner only).
+Newest first. Includes what super admins did to the gym, so platform access is never invisible to
+the owner.
+
+Entry: `{ id, action, actor{ type: user|platform_admin|system, id, name, role }, impersonator{ id, name } | null,
+target{ type, id } | null, changes[{ field, from, to }], metadata, ip, userAgent, requestId, createdAt }`.
+Email and phone values appear as `[hidden]` in `changes`.
+
+Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `auth.password_reset`,
+`auth.password_change`, `auth.logout_all`, `gym.update`, `gym.branding_update`, `tenant.create`,
+`tenant.update`, `tenant.branding_update`, `tenant.suspend`, `tenant.activate`, `tenant.owner_invite`,
+`impersonation.start`, `impersonation.end`.
+
+## Super admin console — `/api/v1/platform` (platform host, super admin only)
+
+| Method & path | Body / query | Result |
+|---|---|---|
+| `GET /platform/tenants` | `?q&status&page&limit` (limit ≤ 100) | `[{ id, name, slug, status, city, subscriptionStatus, createdAt }]` + page meta |
+| `GET /platform/tenants/slug-availability` | `?slug=` | `{ slug, available, reason: null|invalid|reserved|taken }` |
+| `POST /platform/tenants` | `{ name, slug, email?, phone?, address?, settings?, branding?, subscription?, owner{ name, email, phone? } }` | `201 { tenant, appUrl, owner{ id, status: "invited" }, inviteSent }`. `409` if the slug isn't available. |
+| `GET /platform/tenants/:id` | — | `{ tenant, appUrl, owners[], userCounts{ owner, staff, member } }` |
+| `PATCH /platform/tenants/:id` | gym profile fields + `subscription{…}` | gym view |
+| `PATCH /platform/tenants/:id/branding` | branding fields | gym view |
+| `POST /platform/tenants/:id/suspend` | `{ reason }` (3–500 chars) | gym view. The gym's next request gets `403 TENANT_SUSPENDED`; sessions are kept. |
+| `POST /platform/tenants/:id/activate` | — | gym view. `409` if not suspended. |
+| `POST /platform/tenants/:id/owner-invite` | — | `202 { sent, ownerId, throttled }`. `409` if no owner is waiting. |
+| `POST /platform/tenants/:id/impersonate` | `{ reason }` (≥ 10 chars) | `201 { accessToken, expiresIn, expiresAt, user, gym, appUrl }` |
+| `GET /platform/tenants/:id/audit-logs` | audit filters | that gym's log |
+| `GET /platform/audit-logs` | audit filters | platform log (super admin sign-ins) |
+
+**Log in as owner.** The token is an owner access token for that gym's host only, valid for
+`ACCESS_TOKEN_TTL_SEC` (15 min) and **not refreshable** (no cookie). `/auth/me` returns
+`impersonatedBy`, and the dashboard must show a permanent banner while it is set. Every action is
+logged with both the owner and the super admin. The gym must be active.

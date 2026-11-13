@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–2 complete and verified against a real MongoDB 8.0. Milestone 3 next.**
+**Phase 1 — Backend. Milestones 1–3 complete and verified against a real MongoDB 8.0. Milestone 4 next.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -46,10 +46,12 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Seed (2 demo gyms, owner, staff, 3 members each, super admin), `admin:create`, `db:indexes`
 - [x] 143 tests passing on real MongoDB; typecheck, lint, build; end-to-end smoke test of the compiled server
 
-### M3 — Tenant management (super admin) + audit log
-- [ ] Create gym (+ owner invite), update, suspend/activate, branding & theme, settings, slug checks
-- [ ] Audited impersonation ("log in as owner")
-- [ ] `auditLogs` service + middleware hooks
+### M3 — Tenant management (super admin) + audit log ✅
+- [x] Create gym (+ owner invite, in one transaction), list/search/paginate, detail, update, suspend/activate, branding & theme, settings, slug checks (format, reserved, taken, punycode)
+- [x] Owner's own gym: `GET/PATCH /gym`, `PATCH /gym/branding` (host gym only)
+- [x] Audited impersonation ("log in as owner"): access-token-only session, `imp` claim, reason required, can't change owner credentials or end owner sessions, dies if the admin is disabled
+- [x] `auditLogs` (per gym, readable by the owner) + `platformAuditLogs`; append-only at the model layer; field-level changes with email/phone masked; hooks on login, lockout, invite/reset, password change, logout-all, all M3 actions
+- [x] 172 tests passing on real MongoDB (29 new M3 integration tests incl. cross-tenant and role checks); typecheck, lint, build
 
 ### M4 — Staff & member management
 - [ ] **Real email provider** (moved up from M9: members can't sign in without it)
@@ -102,3 +104,5 @@ depend on the backend.
   real-DB isolation suite now runs and found a `runInTenant` scope bug (lazy queries ran outside the
   scope; failed closed, no leak) — fixed. M2 built: 143 tests passing, compiled server smoke-tested
   with curl (owner login, cross-gym token rejected, refresh, member email link, super admin).
+  M3 built: gym management console API, owner settings, audit log, audited impersonation.
+  172 tests passing (29 new). Not yet smoke-tested against the compiled server.

@@ -10,12 +10,15 @@ export type AuthContext =
   | {
       kind: 'tenant';
       userId: string;
+      name: string;
       sessionId: string;
       role: TenantRole;
       permissions: Set<Permission>;
       tenantId: string;
+      /** Present only on a super admin's "log in as owner" session. */
+      impersonator?: { id: string; name: string };
     }
-  | { kind: 'platform'; userId: string; sessionId: string; role: 'super_admin' };
+  | { kind: 'platform'; userId: string; name: string; sessionId: string; role: 'super_admin' };
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -60,25 +63,40 @@ export function authenticate(jwt: JwtConfig): RequestHandler {
       if (req.tenant.status !== 'active') throw Errors.tenantSuspended();
 
       const [session, user] = await Promise.all([
-        Session.exists({
+        Session.findOne({
           _id: claims.sid,
           userId: claims.sub,
           revokedAt: null,
           expiresAt: { $gt: now },
-        }),
+        })
+          .select('impersonatorId')
+          .lean(),
         User.findOne({ _id: claims.sub, status: 'active', archivedAt: null })
-          .select('role permissions')
+          .select('name role permissions')
           .lean(),
       ]);
       if (!session || !user) throw Errors.unauthorized();
 
+      let impersonator: { id: string; name: string } | undefined;
+      const sessionImp = session.impersonatorId ? String(session.impersonatorId) : undefined;
+      if (sessionImp !== claims.imp) throw Errors.unauthorized();
+      if (sessionImp) {
+        const admin = await PlatformAdmin.findOne({ _id: sessionImp, status: 'active' })
+          .select('name')
+          .lean();
+        if (!admin) throw Errors.unauthorized();
+        impersonator = { id: sessionImp, name: admin.name };
+      }
+
       req.auth = {
         kind: 'tenant',
         userId: claims.sub,
+        name: user.name,
         sessionId: claims.sid,
         role: user.role as TenantRole,
         permissions: effectivePermissions(user.role as TenantRole, user.permissions ?? []),
         tenantId: claims.tid,
+        ...(impersonator ? { impersonator } : {}),
       };
       return next();
     }
@@ -95,13 +113,30 @@ export function authenticate(jwt: JwtConfig): RequestHandler {
         revokedAt: null,
         expiresAt: { $gt: now },
       }),
-      PlatformAdmin.exists({ _id: claims.sub, status: 'active' }),
+      PlatformAdmin.findOne({ _id: claims.sub, status: 'active' }).select('name').lean(),
     ]);
     if (!session || !admin) throw Errors.unauthorized();
-    req.auth = { kind: 'platform', userId: claims.sub, sessionId: claims.sid, role: 'super_admin' };
+    req.auth = {
+      kind: 'platform',
+      userId: claims.sub,
+      name: admin.name,
+      sessionId: claims.sid,
+      role: 'super_admin',
+    };
     next();
   };
 }
+
+/**
+ * For actions a super admin must not take while signed in as an owner: they would change the
+ * owner's own credentials or end the owner's real sessions.
+ */
+export const notWhileImpersonating: RequestHandler = (req, _res, next) => {
+  if (req.auth?.kind === 'tenant' && req.auth.impersonator) {
+    throw Errors.forbidden('Not available while signed in as the owner from the platform');
+  }
+  next();
+};
 
 /** Requires a gym user holding ALL the given permissions. */
 export function authorize(...required: Permission[]): RequestHandler {

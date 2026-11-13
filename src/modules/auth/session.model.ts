@@ -23,8 +23,21 @@ function buildSessionSchema(tenantScoped: boolean) {
       revokedAt: { type: Date },
       revokedReason: {
         type: String,
-        enum: ['logout', 'logout_all', 'token_reuse', 'password_changed', 'user_disabled', 'admin'],
+        enum: [
+          'logout',
+          'logout_all',
+          'token_reuse',
+          'password_changed',
+          'user_disabled',
+          'admin',
+          'impersonation_end',
+        ],
       },
+      /**
+       * Gym sessions only: the super admin behind a "log in as owner" session. Such a session has
+       * no usable refresh token (the random hash is never revealed), so it dies with its access token.
+       */
+      impersonatorId: { type: Schema.Types.ObjectId },
       lastUsedAt: { type: Date },
       userAgent: { type: String, maxlength: 300 },
       ip: { type: String, maxlength: 64 },

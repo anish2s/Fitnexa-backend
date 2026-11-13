@@ -9,9 +9,14 @@ import type { Logger } from './lib/logger.js';
 import type { Mailer } from './lib/mailer.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
+import { auditRouter } from './modules/audit/audit.routes.js';
+import { createAuditService } from './modules/audit/audit.service.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { createAuthService } from './modules/auth/auth.service.js';
 import { healthRouter } from './modules/health/health.routes.js';
+import { platformRouter } from './modules/platform/platform.routes.js';
+import { createPlatformService } from './modules/platform/platform.service.js';
+import { gymRouter } from './modules/tenants/gym.routes.js';
 import { publicTenantRouter } from './modules/tenants/public.routes.js';
 import { resolveTenant, type TenantLookup } from './tenancy/resolver.middleware.js';
 
@@ -91,12 +96,16 @@ export function createApp(deps: AppDeps) {
     issuer: env.JWT_ISSUER,
     ttlSec: env.ACCESS_TOKEN_TTL_SEC,
   };
-  const auth = createAuthService({ env, mailer: deps.mailer, logger });
+  const audit = createAuditService({ logger });
+  const auth = createAuthService({ env, mailer: deps.mailer, logger, audit });
+  const platform = createPlatformService({ env, auth, audit, logger });
 
   const v1 = express.Router();
   v1.use('/public', publicTenantRouter());
-  v1.use('/auth', authRouter({ env, jwt, auth }));
-  // Milestone 3+: v1.use('/platform', ...), v1.use('/members', ...), etc.
+  v1.use('/auth', authRouter({ env, jwt, auth, audit }));
+  v1.use('/gym', gymRouter({ jwt, audit }));
+  v1.use('/audit-logs', auditRouter({ jwt, audit }));
+  v1.use('/platform', platformRouter({ jwt, platform, audit }));
   app.use('/api/v1', v1);
 
   app.use(notFoundHandler);

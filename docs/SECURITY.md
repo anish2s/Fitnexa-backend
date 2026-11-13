@@ -1,6 +1,6 @@
 # Security
 
-_Last updated: 2026-11-13 · Phase 1, Milestone 2_
+_Last updated: 2026-11-13 · Phase 1, Milestone 3_
 
 All ✅ items are covered by automated tests that run against a real MongoDB 8.0 server.
 
@@ -71,6 +71,22 @@ Notes for the frontend (Phase 2/3):
   remove it from the address bar (`history.replaceState`), and send `Referrer-Policy: no-referrer`.
 - Verification is a POST from the page, not a GET, so email link-preview scanners can't burn the link.
 
+## Platform administration & audit ✅ M3
+
+| Control | Status |
+|---|---|
+| `/platform/*` only for active super admins on the platform host; gym tokens refused; disabling an admin is immediate | ✅ |
+| Owner endpoints (`/gym`) always act on the host's gym; ids, slug or status in the body are stripped (cross-tenant test) | ✅ |
+| Gym + owner created in one transaction; owner starts `invited` with no password and sets it from an emailed link | ✅ |
+| Slugs: format, no `--` (punycode look-alikes), reserved names, existing gyms incl. archived | ✅ |
+| Suspension effective on the gym's next request (tenant re-read per request, no cache) | ✅ |
+| Impersonation: reason required; audit entry written before the token is returned (if the write fails the session is revoked); token carries `imp`, works on that gym only, can't be refreshed, ends with the access token (15 min) or on `impersonation/end`; re-checks the admin is active on every request | ✅ |
+| While impersonating: no password change, logout-all or session revoke | ✅ |
+| Every impersonated action logged with both actor and impersonator; owner can read their gym's log | ✅ |
+| Audit log append-only at the model layer; personal values (email, phone) masked in `changes` | ✅ |
+| Audit writes for ordinary actions don't fail the request; a failed write is logged with the full entry | ✅ (code) |
+| Search input escaped before use in a RegExp | ✅ |
+
 ## Payments ⬜ M6
 - Razorpay webhooks: HMAC-SHA256 over the **raw** body, timing-safe compare, event id de-duplicated.
 - Client "payment success" callbacks never mark anything paid without server-side signature verification.
@@ -100,3 +116,6 @@ Notes for the frontend (Phase 2/3):
    this transport.
 6. Members without an email address cannot use the member app. Front desk must collect an email at
    registration (Milestone 4 will make this visible in the member form).
+7. Audit log retention has no TTL yet. Needs a business decision (e.g. 1–3 years) before launch.
+8. The audit log is append-only in application code only; the MongoDB user can still modify it.
+   Production should use a DB role without update/delete on `auditLogs` if feasible on the chosen host.

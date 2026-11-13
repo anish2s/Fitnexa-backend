@@ -88,8 +88,8 @@ Indexes: `{ tenantId, email } unique partial`, `{ tenantId, phone } unique parti
 
 `userId`, `refreshTokenHash` (SHA-256; unique), `previousRefreshHashes[]` (last 5, for theft
 detection), `rotatedAt`, `expiresAt` (**TTL index**: MongoDB deletes expired sessions), `revokedAt`,
-`revokedReason` (`logout` / `logout_all` / `token_reuse` / `password_changed` / `user_disabled` / `admin`),
-`lastUsedAt`, `userAgent`, `ip`.
+`revokedReason` (`logout` / `logout_all` / `token_reuse` / `password_changed` / `user_disabled` / `admin` / `impersonation_end`),
+`impersonatorId` (gym sessions only: the super admin behind a "log in as owner" session), `lastUsedAt`, `userAgent`, `ip`.
 
 ### authTokens ✅ (tenant-scoped)
 `src/modules/auth/auth-token.model.ts`. Single-use emailed links.
@@ -103,6 +103,16 @@ detection), `rotatedAt`, `expiresAt` (**TTL index**: MongoDB deletes expired ses
 Indexes: `{ tenantId, phone } unique`, `{ tenantId, memberCode } unique`, `{ tenantId, status, joinDate }`,
 text-ish search via `{ tenantId, nameLower }` prefix index (Atlas Search later if needed).
 
-### plans ⬜ M5 · memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · auditLogs ⬜ M3 · counters ⬜ M6 · jobLocks / notifications ⬜ M9
+### auditLogs ✅ (tenant-scoped) · platformAuditLogs ✅ (not scoped)
+`src/modules/audit/audit.model.ts`. Append-only: update/replace/delete queries throw.
+
+`action` (`area.verb`), `actor { type: user|platform_admin|system, id, name, role }`,
+`impersonator { id, name }`, `target { type, id }`, `changes[{ field, from, to }]` (email/phone values
+masked), `metadata`, `ip`, `userAgent`, `requestId`, `createdAt`.
+Indexes (prefixed with `tenantId` on the scoped collection): `{ createdAt: -1 }`,
+`{ action, createdAt: -1 }`, `{ actor.id, createdAt: -1 }`. No TTL yet: retention period is an open
+decision (see SECURITY.md).
+
+### plans ⬜ M5 · memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · counters ⬜ M6 · jobLocks / notifications ⬜ M9
 
 Field lists as in the review table above; each gets its own section here when implemented.

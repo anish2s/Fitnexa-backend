@@ -143,6 +143,7 @@ describe('authorize middleware', () => {
   const staff: AuthContext = {
     kind: 'tenant',
     userId: 'u',
+    name: 'Staff',
     sessionId: 's',
     role: 'staff',
     tenantId: 'g',
@@ -162,6 +163,7 @@ describe('authorize middleware', () => {
     const admin: AuthContext = {
       kind: 'platform',
       userId: 'a',
+      name: 'Admin',
       sessionId: 's',
       role: 'super_admin',
     };

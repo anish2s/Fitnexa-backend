@@ -9,6 +9,7 @@ import type { Logger } from '../../lib/logger.js';
 import type { Mailer } from '../../lib/mailer.js';
 import { normalizePhone } from '../../lib/phone.js';
 import type { ResolvedTenant } from '../../tenancy/resolver.middleware.js';
+import type { AuditContext, AuditService } from '../audit/audit.service.js';
 import { PlatformAdmin } from '../platform/platform-admin.model.js';
 import { User, toPublicUser } from '../users/user.model.js';
 import { AuthToken, type AuthTokenType } from './auth-token.model.js';
@@ -26,6 +27,7 @@ export type AuthScope = { kind: 'tenant'; tenant: ResolvedTenant } | { kind: 'pl
 export interface ClientMeta {
   ip?: string;
   userAgent?: string;
+  requestId?: string;
 }
 
 export interface IssuedSession {
@@ -40,8 +42,13 @@ export interface IssuedSession {
 const REFRESH_RACE_GRACE_MS = 20_000;
 const EMAIL_LINKS_PER_15_MIN = 3;
 
-export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logger }) {
-  const { env, mailer, logger } = deps;
+export function createAuthService(deps: {
+  env: Env;
+  mailer: Mailer;
+  logger: Logger;
+  audit: AuditService;
+}) {
+  const { env, mailer, logger, audit } = deps;
   const jwt: JwtConfig = {
     secret: env.JWT_ACCESS_SECRET,
     issuer: env.JWT_ISSUER,
@@ -52,6 +59,19 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
   const appUrl = (tenant: ResolvedTenant, path: string) =>
     env.GYM_APP_URL_TEMPLATE.replace('{slug}', tenant.slug) + path;
   const clip = (s: string | undefined, n: number) => (s ? s.slice(0, n) : undefined);
+
+  /** Audit context for actions performed by the principal themselves (sign-in, reset). */
+  function selfContext(scope: AuthScope, p: Principal, meta: ClientMeta): AuditContext {
+    return {
+      actor:
+        scope.kind === 'tenant'
+          ? { type: 'user', id: String(p._id), name: p.name, role: p.role }
+          : { type: 'platform_admin', id: String(p._id), name: p.name },
+      ip: clip(meta.ip, 64),
+      userAgent: clip(meta.userAgent, 300),
+      requestId: clip(meta.requestId, 64),
+    };
+  }
 
   // ---------------------------------------------------------------- sessions
 
@@ -181,7 +201,11 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
     if (!ok) {
       // Atomic increment, so parallel guesses can't skip the lock.
       const updated = await (model as typeof User)
-        .findOneAndUpdate({ _id: doc._id }, { $inc: { failedLogins: 1 } }, { new: true })
+        .findOneAndUpdate(
+          { _id: doc._id },
+          { $inc: { failedLogins: 1 } },
+          { returnDocument: 'after' },
+        )
         .select('+failedLogins');
       if ((updated?.get('failedLogins') as number) >= env.LOGIN_MAX_ATTEMPTS) {
         await (model as typeof User).updateOne(
@@ -196,6 +220,17 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
         logger.warn(
           { userId: String(doc._id), scope: scope.kind },
           'Account locked after failed logins',
+        );
+        await audit.record(
+          { ...selfContext(scope, doc.toObject() as Principal, meta), actor: { type: 'system' } },
+          {
+            action: 'auth.account_locked',
+            target: {
+              type: scope.kind === 'tenant' ? 'user' : 'platform_admin',
+              id: String(doc._id),
+            },
+            metadata: { minutes: env.LOGIN_LOCK_MIN },
+          },
         );
       }
       throw Errors.invalidCredentials();
@@ -213,7 +248,13 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
       { $set: set, $unset: { lockedUntil: 1 } },
     );
 
-    return issueSession(scope, doc.toObject() as Principal, meta);
+    const principal = doc.toObject() as Principal;
+    const issued = await issueSession(scope, principal, meta);
+    await audit.record(selfContext(scope, principal, meta), {
+      action: 'auth.login',
+      metadata: { sessionId: issued.sessionId },
+    });
+    return issued;
   }
 
   // ---------------------------------------------------------------- one-time email links
@@ -256,7 +297,7 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
         expiresAt: { $gt: new Date() },
       },
       { $set: { usedAt: new Date() } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
     if (!record) throw Errors.invalidLink();
     return record;
@@ -352,7 +393,12 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
   }
 
   /** Completes a password reset OR an invite. All existing sessions are revoked. */
-  async function resetPassword(tenant: ResolvedTenant, token: string, newPassword: string) {
+  async function resetPassword(
+    tenant: ResolvedTenant,
+    token: string,
+    newPassword: string,
+    meta: ClientMeta = {},
+  ) {
     const record = await consumeLink(['password_reset', 'invite'], token);
     const user = await User.findOne({ _id: record.userId, role: { $in: ['owner', 'staff'] } });
     if (!user || user.status === 'disabled' || user.archivedAt) throw Errors.invalidLink();
@@ -369,6 +415,12 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
     await AuthToken.updateMany(
       { userId: user._id, type: { $in: ['password_reset', 'invite'] }, usedAt: null },
       { $set: { usedAt: new Date() } },
+    );
+    await audit.record(
+      selfContext({ kind: 'tenant', tenant }, user.toObject() as Principal, meta),
+      {
+        action: record.type === 'invite' ? 'auth.invite_accepted' : 'auth.password_reset',
+      },
     );
   }
 
@@ -418,7 +470,7 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
         },
         $push: { previousRefreshHashes: { $each: [presented], $slice: -5 } },
       },
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!session) {
@@ -486,11 +538,65 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
     return rows.map((s) => ({
       id: String(s._id),
       current: String(s._id) === currentSessionId,
+      /** A super admin's "log in as owner" session; the owner can end it here. */
+      impersonated: Boolean(s.impersonatorId),
       createdAt: s.createdAt,
       lastUsedAt: s.lastUsedAt ?? s.createdAt,
       userAgent: s.userAgent ?? null,
       ip: s.ip ?? null,
     }));
+  }
+
+  // ---------------------------------------------------------------- "log in as owner"
+
+  /**
+   * Issues a short-lived owner session for a super admin. Must run inside the gym's tenant scope.
+   *
+   * Only an access token is returned: the session's refresh hash is random and never revealed, so
+   * the session can't be extended and ends when the access token expires (ACCESS_TOKEN_TTL_SEC).
+   * The token carries `imp` and only works while that super admin is still active.
+   */
+  async function startImpersonation(tenant: ResolvedTenant, adminId: string, meta: ClientMeta) {
+    const owner = await User.findOne({ role: 'owner', status: 'active', archivedAt: null })
+      .sort({ createdAt: 1 })
+      .lean<Principal>();
+    if (!owner) throw Errors.conflict('This gym has no active owner to sign in as');
+
+    const expiresAt = new Date(Date.now() + env.ACCESS_TOKEN_TTL_SEC * 1000);
+    const session = await Session.create({
+      userId: owner._id,
+      refreshTokenHash: hashToken(randomToken()),
+      expiresAt,
+      lastUsedAt: new Date(),
+      impersonatorId: adminId,
+      ip: clip(meta.ip, 64),
+      userAgent: clip(meta.userAgent, 300),
+    });
+    const sid = String(session._id);
+    const accessToken = await signAccessToken(jwt, {
+      typ: 'tenant',
+      sub: String(owner._id),
+      sid,
+      tid: tenant.id.toHexString(),
+      role: 'owner',
+      imp: adminId,
+    });
+    return {
+      accessToken,
+      tokenType: 'Bearer' as const,
+      expiresIn: env.ACCESS_TOKEN_TTL_SEC,
+      expiresAt,
+      sessionId: sid,
+      user: publicPrincipal({ kind: 'tenant', tenant }, owner),
+    };
+  }
+
+  /** Ends the caller's own impersonation session (gym host). */
+  async function endImpersonation(sessionId: string) {
+    await Session.updateOne(
+      { _id: sessionId, impersonatorId: { $ne: null }, revokedAt: null },
+      { $set: { revokedAt: new Date(), revokedReason: 'impersonation_end' } },
+    );
   }
 
   async function me(scope: AuthScope, userId: string) {
@@ -514,6 +620,8 @@ export function createAuthService(deps: { env: Env; mailer: Mailer; logger: Logg
       revokeUserSessions(scope, userId, 'logout_all'),
     revokeUserSessions,
     listSessions,
+    startImpersonation,
+    endImpersonation,
     me,
   };
 }

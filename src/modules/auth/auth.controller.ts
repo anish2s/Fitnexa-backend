@@ -2,6 +2,7 @@ import type { CookieOptions, Request, Response } from 'express';
 import type { Env } from '../../config/env.js';
 import { Errors } from '../../lib/errors.js';
 import { noContent, ok } from '../../lib/response.js';
+import { auditContextFrom, type AuditService } from '../audit/audit.service.js';
 import type { AuthScope, AuthService, ClientMeta, IssuedSession } from './auth.service.js';
 
 /**
@@ -10,7 +11,7 @@ import type { AuthScope, AuthService, ClientMeta, IssuedSession } from './auth.s
  * Refresh token: HttpOnly cookie, never in the response body, so page scripts (and any XSS) can't
  * read it. The access token is returned in the body; the frontend keeps it in memory.
  */
-export function createAuthController(env: Env, auth: AuthService) {
+export function createAuthController(env: Env, auth: AuthService, audit: AuditService) {
   const cookieName = env.COOKIE_SECURE ? '__Host-gym_rt' : 'gym_rt';
   const cookieBase: CookieOptions = {
     httpOnly: true,
@@ -21,7 +22,11 @@ export function createAuthController(env: Env, auth: AuthService) {
 
   const scopeOf = (req: Request): AuthScope =>
     req.tenant ? { kind: 'tenant', tenant: req.tenant } : { kind: 'platform' };
-  const meta = (req: Request): ClientMeta => ({ ip: req.ip, userAgent: req.get('user-agent') });
+  const meta = (req: Request): ClientMeta => ({
+    ip: req.ip,
+    userAgent: req.get('user-agent'),
+    requestId: req.id === undefined ? undefined : String(req.id),
+  });
 
   function readRefreshCookie(req: Request): string | undefined {
     const raw = req.headers.cookie;
@@ -90,7 +95,7 @@ export function createAuthController(env: Env, auth: AuthService) {
     async resetPassword(req: Request, res: Response) {
       const tenant = activeTenant(req);
       const { token, password } = req.valid.body as { token: string; password: string };
-      await auth.resetPassword(tenant, token, password);
+      await auth.resetPassword(tenant, token, password, meta(req));
       noContent(res);
     },
 
@@ -116,6 +121,7 @@ export function createAuthController(env: Env, auth: AuthService) {
 
     async logoutAll(req: Request, res: Response) {
       await auth.logoutAll(scopeOf(req), req.auth!.userId);
+      await audit.record(auditContextFrom(req), { action: 'auth.logout_all' });
       clearCookie(res);
       noContent(res);
     },
@@ -123,10 +129,13 @@ export function createAuthController(env: Env, auth: AuthService) {
     async me(req: Request, res: Response) {
       const user = await auth.me(scopeOf(req), req.auth!.userId);
       res.set('Cache-Control', 'no-store');
+      const a = req.auth!;
       ok(res, {
         user,
-        scope: req.auth!.kind,
+        scope: a.kind,
         gym: req.tenant ? { name: req.tenant.name, slug: req.tenant.slug } : null,
+        // The dashboard shows a permanent banner while this is set.
+        impersonatedBy: a.kind === 'tenant' && a.impersonator ? a.impersonator : null,
       });
     },
 
@@ -154,6 +163,20 @@ export function createAuthController(env: Env, auth: AuthService) {
         currentPassword,
         newPassword,
       );
+      await audit.record(auditContextFrom(req), { action: 'auth.password_change' });
+      noContent(res);
+    },
+
+    async endImpersonation(req: Request, res: Response) {
+      const a = req.auth!;
+      if (a.kind !== 'tenant' || !a.impersonator) {
+        throw Errors.badRequest('This session is not a platform sign-in');
+      }
+      await auth.endImpersonation(a.sessionId);
+      await audit.record(auditContextFrom(req), {
+        action: 'impersonation.end',
+        target: { type: 'user', id: a.userId },
+      });
       noContent(res);
     },
   };
