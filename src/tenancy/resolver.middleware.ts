@@ -71,7 +71,7 @@ export function resolveTenant(opts: ResolverOptions): RequestHandler {
     if (tenant.status === 'archived') throw Errors.tenantNotFound();
     req.tenant = tenant;
     // Everything downstream (including async continuations) runs inside this tenant's scope.
-    runInTenant(tenant.id, () => next());
+    await runInTenant(tenant.id, () => next());
   };
 }
 

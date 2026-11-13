@@ -23,17 +23,31 @@ function toObjectId(id: Types.ObjectId | string): Types.ObjectId {
   return new Types.ObjectId(id);
 }
 
-export function runInTenant<T>(tenantId: Types.ObjectId | string, fn: () => T): T {
-  return storage.run({ kind: 'tenant', tenantId: toObjectId(tenantId) }, fn);
+/**
+ * Runs fn inside a scope and AWAITS its result inside that scope.
+ *
+ * Awaiting inside matters: Mongoose queries are lazy thenables that only execute when awaited.
+ * `runInTenant(id, () => Model.find())` returns the un-run query; if it were awaited by the
+ * caller, outside the scope, it would execute with no tenant. (Found by the real-DB suite.)
+ */
+function runScoped<T>(store: TenantStore, fn: () => T | PromiseLike<T>): Promise<T> {
+  return storage.run(store, async () => await fn());
+}
+
+export function runInTenant<T>(
+  tenantId: Types.ObjectId | string,
+  fn: () => T | PromiseLike<T>,
+): Promise<T> {
+  return runScoped({ kind: 'tenant', tenantId: toObjectId(tenantId) }, fn);
 }
 
 /**
  * Cross-tenant access for platform operations (super-admin listings, the renewal job iterating
  * over gyms). The reason is mandatory so every bypass is greppable and loggable.
  */
-export function runAsPlatform<T>(reason: string, fn: () => T): T {
+export function runAsPlatform<T>(reason: string, fn: () => T | PromiseLike<T>): Promise<T> {
   if (!reason.trim()) throw new TenantIsolationError('runAsPlatform requires a reason');
-  return storage.run({ kind: 'platform', reason }, fn);
+  return runScoped({ kind: 'platform', reason }, fn);
 }
 
 export function getTenantStore(): TenantStore | undefined {
