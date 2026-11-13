@@ -1,11 +1,45 @@
 {
-  "name": "gym-saas",
+  "name": "gym-saas-api",
+  "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "type": "module",
   "scripts": {
-    "dev:api": "npm run dev -w @gym/api",
-    "test": "npm test -w @gym/api",
-    "lint": "npm run lint -w @gym/api"
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src tests",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write ."
   },
-  "engines": { "node": ">=20" }
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
+    "mongoose": "^9.12.1",
+    "pino": "^10.4.0",
+    "pino-http": "^11.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^10.14.0",
+    "mongodb-memory-server": "^11.3.0",
+    "prettier": "^3.10.1",
+    "supertest": "^7.3.2",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^5.1.0"
+  },
+  "description": "Multi-tenant Gym SaaS — backend API (Express + MongoDB)",
+  "engines": {
+    "node": ">=22"
+  }
 }

@@ -17,15 +17,15 @@ proxies in front of the API (e.g. Cloudflare → Next.js → API = `2`) so `req.
 are taken from the right hop and can't be spoofed from outside.
 
 ## Environment
-See `apps/api/.env.example`. Production requirements enforced at startup:
+See `.env.example`. Production requirements enforced at startup:
 - `NODE_ENV=production`, `ALLOW_TENANT_HEADER=false`, `CORS_ORIGINS` set.
 - Secrets only in the host's secret store, never in git.
 
 ## Build & run
 ```bash
 npm ci
-npm run build -w @gym/api
-NODE_ENV=production node apps/api/dist/server.js
+npm run build
+NODE_ENV=production node dist/server.js
 ```
 Health check path `/health`; readiness `/ready`. Graceful shutdown on SIGTERM (10 s drain).
 

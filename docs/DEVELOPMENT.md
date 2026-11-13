@@ -13,8 +13,8 @@
 ## Setup
 ```bash
 npm install
-cp apps/api/.env.example apps/api/.env   # then edit MONGODB_URI
-npm run dev:api                           # http://localhost:4000
+cp .env.example .env   # then edit MONGODB_URI
+npm run dev            # http://localhost:4000
 ```
 
 ### Trying tenant resolution locally
@@ -25,7 +25,7 @@ curl -H 'Host: fitzone.localhost' http://127.0.0.1:4000/api/v1/public/tenant
 ```
 (Seed data arrives in Milestone 2; until then insert a tenant with `mongosh`.)
 
-## Scripts (run inside `apps/api` or with `-w @gym/api`)
+## Scripts
 | Script | What it does |
 |---|---|
 | `npm run dev` | watch mode with tsx |

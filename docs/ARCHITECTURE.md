@@ -90,32 +90,36 @@ Key properties:
 - **Platform scope:** super-admin and job code must call `runAsPlatform(reason, fn)` explicitly.
 - **Tenants collection** is the only unscoped business collection (it is the registry itself).
 
-## 4. Repository layout (monorepo)
+## 4. Repositories
 
-**Decision: one repository with npm workspaces.** One developer, three apps that share types and
-release together; a monorepo keeps API contracts and the two frontends in lockstep with one CI and one
-`git log`. No Turborepo/Nx until build times justify it.
+**Decision (2026-11-13, owner's choice): two repositories.**
+
+| Repo | Contains | Deploys as |
+|---|---|---|
+| `gym-saas-api` (this repo) | Express + MongoDB backend | API service |
+| `gym-saas-web` | Admin dashboard (Phase 2) and member PWA (Phase 3), as two Next.js apps in one repo | Web service(s) |
+
+**The contract between them is the OpenAPI spec** this repo publishes (Milestone 10, served at
+`/api/v1/openapi.json`). The web repo generates its TypeScript API types from that spec, so the
+frontend never hand-copies backend types and never duplicates business logic. API changes that
+break the contract are versioned (`/api/v2`) or released backend-first.
 
 ```
-gym-saas/
-├── apps/
-│   ├── api/                 # Phase 1 — Express backend (this phase)
-│   │   ├── src/
-│   │   │   ├── app.ts       # builds the Express app (dependency-injected, testable)
-│   │   │   ├── server.ts    # process entry: env, DB, listen, graceful shutdown
-│   │   │   ├── config/      # env schema (zod)
-│   │   │   ├── db/          # connection
-│   │   │   ├── lib/         # errors, response envelope, logger
-│   │   │   ├── middleware/  # cors, validate, error handler (auth/rbac in M2)
-│   │   │   ├── tenancy/     # host parsing, resolver, context, tenant-scope plugin
-│   │   │   └── modules/     # feature modules: routes · controller · service · model · schemas
-│   │   │       ├── health/
-│   │   │       └── tenants/
-│   │   └── tests/           # unit/ http/ integration/ helpers/
-│   ├── dashboard/           # Phase 2 (not started)
-│   └── member/              # Phase 3 (not started)
-├── packages/                # shared code when a second consumer exists (e.g. API types)
-└── docs/
+gym-saas-api/
+├── src/
+│   ├── app.ts            # builds the Express app (dependency-injected, testable)
+│   ├── server.ts         # process entry: env, DB, listen, graceful shutdown
+│   ├── config/           # env schema (zod)
+│   ├── db/               # connection
+│   ├── lib/              # errors, response envelope, logger
+│   ├── middleware/       # cors, validate, error handler (auth/rbac in M2)
+│   ├── tenancy/          # host parsing, resolver, context, tenant-scope plugin
+│   └── modules/          # feature modules: routes · controller · service · model · schemas
+│       ├── health/
+│       └── tenants/
+├── tests/                # unit/ http/ integration/ helpers/
+├── docs/
+└── .github/workflows/ci.yml
 ```
 
 Each feature module follows the same shape: `*.routes.ts` (wiring + middleware), `*.controller.ts`

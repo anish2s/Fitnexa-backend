@@ -16,7 +16,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 ## Phase 1 milestones
 
 ### M1 — Foundation & tenant isolation core ✅
-- [x] Monorepo (npm workspaces), TypeScript strict, ESLint, Prettier, Vitest
+- [x] Standalone backend repo, TypeScript strict, ESLint, Prettier, Vitest
 - [x] Validated environment config (fails fast; production guards)
 - [x] Express app factory: helmet, request ids, pino logging, CORS allow-list, rate limit, JSON limits
 - [x] Standard response + error envelope; central error handler
