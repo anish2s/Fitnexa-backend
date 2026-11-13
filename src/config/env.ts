@@ -49,8 +49,70 @@ export const envSchema = z
 
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+    /** Per IP + gym + identifier, for login, email-link and forgot-password requests. */
+    AUTH_RATE_LIMIT_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(15 * 60_000),
+    AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+
+    // --- Authentication ---
+    /** HMAC key for access tokens. 32+ random bytes, e.g. `openssl rand -base64 48`. */
+    JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
+    JWT_ISSUER: z.string().default('gym-saas-api'),
+    ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().min(60).max(3600).default(900),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+    MAGIC_LINK_TTL_MIN: z.coerce.number().int().min(5).max(60).default(15),
+    PASSWORD_RESET_TTL_MIN: z.coerce.number().int().min(10).max(120).default(30),
+    INVITE_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(72),
+    LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(3).max(20).default(5),
+    LOGIN_LOCK_MIN: z.coerce.number().int().min(1).max(1440).default(15),
+    /** Refresh cookie Secure flag. Must be true in production (HTTPS). */
+    COOKIE_SECURE: z
+      .enum(['true', 'false', '1', '0'])
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === 'true' || v === '1')),
+
+    // --- Links in emails ---
+    /** Gym app URL. {slug} is replaced, e.g. https://{slug}.yourapp.in */
+    GYM_APP_URL_TEMPLATE: z
+      .string()
+      .default('http://{slug}.localhost:3000')
+      .refine((v) => v.includes('{slug}'), 'GYM_APP_URL_TEMPLATE must contain {slug}'),
+
+    // --- Email ---
+    /** log: writes emails to the log (dev only). memory: kept in memory (tests). */
+    MAIL_TRANSPORT: z.enum(['log', 'memory']).default('log'),
+    MAIL_FROM: z.string().default('Gym App <no-reply@localhost>'),
   })
+  .transform((env) => ({
+    ...env,
+    COOKIE_SECURE: env.COOKIE_SECURE ?? env.NODE_ENV === 'production',
+  }))
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production' && !env.COOKIE_SECURE) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['COOKIE_SECURE'],
+        message: 'COOKIE_SECURE must be true in production',
+      });
+    }
+    if (env.NODE_ENV === 'production' && ['log', 'memory'].includes(env.MAIL_TRANSPORT)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_TRANSPORT'],
+        message:
+          'A real email provider is required in production (added in Milestone 9); log/memory are dev-only',
+      });
+    }
+    if (env.NODE_ENV === 'production' && !env.GYM_APP_URL_TEMPLATE.startsWith('https://')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['GYM_APP_URL_TEMPLATE'],
+        message: 'GYM_APP_URL_TEMPLATE must use https in production',
+      });
+    }
     if (env.NODE_ENV === 'production' && env.ALLOW_TENANT_HEADER) {
       ctx.addIssue({
         code: 'custom',

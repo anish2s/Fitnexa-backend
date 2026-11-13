@@ -29,5 +29,21 @@ NODE_ENV=production node dist/server.js
 ```
 Health check path `/health`; readiness `/ready`. Graceful shutdown on SIGTERM (10 s drain).
 
-## Indexes
-`autoIndex` is off in production. Run the index sync script (added in M2) as a release step.
+## Release steps
+`autoIndex` is off in production. On each release:
+```bash
+npm run db:indexes:prod                       # additive only; never drops an index
+```
+First deploy only, create your super admin (password from ADMIN_PASSWORD or printed once):
+```bash
+npm run admin:create:prod -- --email you@yourapp.in --name "Your Name"
+```
+Never run `npm run seed` against production (it refuses).
+
+## Required secrets
+`JWT_ACCESS_SECRET` (`openssl rand -base64 48`), `MONGODB_URI`. Changing `JWT_ACCESS_SECRET`
+signs everyone out within 15 minutes (their refresh still works and issues new tokens).
+
+## Blocked until Milestone 9
+Production refuses to start until a real email provider is configured (`MAIL_TRANSPORT`), because
+members sign in by email link.

@@ -1,17 +1,18 @@
 # Progress
 
-_Last updated: 2026-11-12_
+_Last updated: 2026-11-13_
 
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestone 1 complete (verified with unit + HTTP tests). Milestone 2 next.**
+**Phase 1 — Backend. Milestones 1–2 complete and verified against a real MongoDB 8.0. Milestone 3 next.**
 
-## Open decisions (need your input)
-- [ ] **Member login method** (blocks M2 design for the member role):
-  - A. Phone + password, set via an activation link the front desk shares on WhatsApp (`wa.me`). Free, works now. _(recommended for MVP)_
-  - B. Phone + SMS OTP. Best UX, but needs DLT registration + an SMS provider (~₹0.15–0.25 per OTP).
-  - C. Email magic link. Free, but many members won't have or check email.
+## Decisions
+- [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
+- [x] **Member login** (2026-11-13): **email sign-in link** (owner's choice). Consequences:
+  - Members without an email can't use the member app; front desk must capture emails (M4 form will flag it).
+  - A real email provider is needed **before the pilot**, not at M9. Proposed: pull the provider
+    integration forward into M4. Needs your choice of provider and a verified sending domain.
 
 ## Phase 1 milestones
 
@@ -27,19 +28,23 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Public branding endpoint `GET /api/v1/public/tenant`
 - [x] `/health`, `/ready`
 - [x] 53 tests passing (unit + HTTP), typecheck, lint, build
-- [~] 13 DB integration tests written (cross-tenant attacks, per-gym uniqueness, tenant lookup) — **skipped in the build sandbox** (no MongoDB available); must be run on a machine with MongoDB
+- [x] 13 DB integration tests (cross-tenant attacks, per-gym uniqueness, tenant lookup): passing on MongoDB 8.0 since 2026-11-13; they exposed and fixed a scope bug in `runInTenant`
 - [x] Docs: ARCHITECTURE, DATABASE, SECURITY, DEVELOPMENT, DEPLOYMENT (draft), API, DESIGN
 
-### M2 — Authentication & RBAC
-- [ ] `platformAdmins`, `users`, `sessions`, `authTokens` models
-- [ ] scrypt password hashing
-- [ ] Login (tenant users on gym host; super admin on platform host), refresh rotation, logout, logout-all, `me`
-- [ ] Forgot / reset password (email interface; dev transport logs the link)
-- [ ] `authenticate` middleware: token tenant == host tenant; `passwordChangedAt` check
-- [ ] `authorize(permission)` with role → permission map (owner / staff / member / super admin)
-- [ ] Login rate limit + lockout
-- [ ] Seed script: 2 demo gyms with owner, staff, members
-- [ ] Tests: auth flows, cross-tenant token replay, role denials
+### M2 — Authentication & RBAC ✅
+- [x] `platformAdmins`, `users`, `sessions` / `platformSessions`, `authTokens` models
+- [x] scrypt password hashing with upgradeable parameters
+- [x] Owner/staff login (email or phone), super admin login on platform host only
+- [x] **Member sign-in by one-time email link** (single use, 15 min, throttled, gym-bound)
+- [x] Rotating refresh tokens in HttpOnly cookies, theft detection, logout, logout-all, session list/revoke, `me`
+- [x] Forgot / reset password, change password; invite completion (used by M3/M4)
+- [x] `authenticate`: token gym == host gym; live session + live role check on every request
+- [x] `authorize(permission)` with role → permission map and limited staff grants
+- [x] Login rate limits (IP+gym, IP+gym+account) + account lockout
+- [x] CORS tightened to same-gym origins; CSRF guard on cookie endpoints
+- [x] Mailer interface (dev log + test memory transports; real provider pending)
+- [x] Seed (2 demo gyms, owner, staff, 3 members each, super admin), `admin:create`, `db:indexes`
+- [x] 143 tests passing on real MongoDB; typecheck, lint, build; end-to-end smoke test of the compiled server
 
 ### M3 — Tenant management (super admin) + audit log
 - [ ] Create gym (+ owner invite), update, suspend/activate, branding & theme, settings, slug checks
@@ -47,6 +52,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [ ] `auditLogs` service + middleware hooks
 
 ### M4 — Staff & member management
+- [ ] **Real email provider** (moved up from M9: members can't sign in without it)
 - [ ] Staff CRUD, deactivate, permission overrides
 - [ ] Members CRUD, archive, search, pagination, profile
 - [ ] Cloudinary signed uploads (logo, member photo)
@@ -74,7 +80,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 
 ### M9 — Jobs, notifications, privacy
 - [ ] node-cron + Mongo lease lock; renewal reminder queue with retry
-- [ ] WhatsApp `wa.me` link generation; email provider interface
+- [ ] WhatsApp `wa.me` link generation
 - [ ] DPDP export / erase
 
 ### M10 — Hardening & Phase 1 gate
@@ -92,3 +98,7 @@ depend on the backend.
 ## Session log
 - **2026-11-12** — Environment inspected (no repo; Node 22, npm 10; no MongoDB reachable from the build
   sandbox). Architecture assessed. M1 built and verified: 53 passed, 13 DB tests skipped (no MongoDB).
+- **2026-11-13** — Split into two repositories. Obtained a MongoDB 8.0 binary from conda-forge; the
+  real-DB isolation suite now runs and found a `runInTenant` scope bug (lazy queries ran outside the
+  scope; failed closed, no leak) — fixed. M2 built: 143 tests passing, compiled server smoke-tested
+  with curl (owner login, cross-gym token rejected, refresh, member email link, super admin).

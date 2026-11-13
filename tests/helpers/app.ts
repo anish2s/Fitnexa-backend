@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { createApp } from '../../src/app.js';
 import { parseEnv, type Env } from '../../src/config/env.js';
 import { createLogger } from '../../src/lib/logger.js';
+import { memoryMailer, type Mailer } from '../../src/lib/mailer.js';
 import type { ResolvedTenant, TenantLookup } from '../../src/tenancy/resolver.middleware.js';
 
 export const GYM_A_ID = new Types.ObjectId();
@@ -52,12 +53,18 @@ export function testEnv(overrides: Record<string, string> = {}): Env {
 }
 
 export function buildTestApp(
-  opts: { env?: Record<string, string>; dbReady?: boolean; lookup?: TenantLookup } = {},
+  opts: {
+    env?: Record<string, string>;
+    dbReady?: boolean;
+    lookup?: TenantLookup;
+    mailer?: Mailer;
+  } = {},
 ) {
   return createApp({
     env: testEnv(opts.env),
     logger: createLogger('silent'),
     tenantLookup: opts.lookup ?? stubLookup,
     isDbReady: () => opts.dbReady ?? true,
+    mailer: opts.mailer ?? memoryMailer(),
   });
 }

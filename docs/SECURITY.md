@@ -1,6 +1,8 @@
 # Security
 
-_Last updated: 2026-11-12 · Phase 1, Milestone 1_
+_Last updated: 2026-11-13 · Phase 1, Milestone 2_
+
+All ✅ items are covered by automated tests that run against a real MongoDB 8.0 server.
 
 Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified · ⬜ planned (milestone)
 
@@ -18,10 +20,13 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 | Filters/inserts naming another tenant throw; updates can't change `tenantId` | ✅ | same |
 | Unscopeable ops (`estimatedDocumentCount`, `bulkWrite`) blocked in tenant scope | ✅ | same |
 | Isolation violations logged as fatal, returned as opaque 500 | ✅ | `middleware/error-handler.ts` |
-| Real-DB proof: Gym B cannot list / get-by-id / update / delete / aggregate Gym A data | 🟡 | `tests/integration/tenant-isolation.int.test.ts` — written, skipped in the build sandbox (no MongoDB), must pass on a machine with MongoDB |
+| Real-DB proof: Gym B cannot list / get-by-id / update / delete / aggregate Gym A data | ✅ | `tests/integration/tenant-isolation.int.test.ts` |
+| `runInTenant` / `runAsPlatform` finish lazy Mongoose queries inside the scope (bug found and fixed 2026-11-13) | ✅ | `tenancy/context.ts` |
 | Duplicate-key errors never echo values (could belong to another gym) | ✅ (code) | `middleware/error-handler.ts` |
-| Token tenant must equal host tenant | ⬜ M2 | |
-| Super admins authenticate only on the platform host | ⬜ M2 | |
+| Token tenant must equal host tenant (Gym A token rejected on Gym B) | ✅ | `middleware/authenticate.ts`, `tests/integration/auth.int.test.ts` |
+| Gym credentials, email links, reset links and refresh cookies only work on their own gym's host | ✅ | same |
+| Super admins: separate collection, authenticate only on the platform host; gym tokens rejected there | ✅ | same |
+| CORS: a gym's origin may only call its own host (no cross-gym credentialed requests) | ✅ | `middleware/cors.ts`, `tests/http/app.test.ts` |
 | Every new tenant model gets the cross-tenant suite | ⬜ M4+ | |
 
 ## Transport, headers, input
@@ -29,24 +34,42 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 | Control | Status |
 |---|---|
 | helmet security headers; `x-powered-by` off | ✅ |
-| CORS allow-list with safe wildcard (`https://*.yourapp.in`), look-alikes refused | ✅ |
-| Rate limiting with standard 429 envelope | ✅ (per-IP global) · ⬜ per-identifier login limits M2 |
+| CORS allow-list; wildcard entries match only the request's own host; look-alikes refused | ✅ |
+| Rate limiting with standard 429 envelope: global per IP, plus per IP+gym and per IP+gym+account on auth endpoints | ✅ |
 | JSON body limit 100 kb; malformed JSON → 400 | ✅ |
 | `query parser: simple` (blocks `?a[$ne]=` operator injection), `strictQuery` | ✅ |
-| Zod validation strips unknown keys (incl. any client `tenantId`) | ✅ (middleware) · used by routes from M2 |
+| Zod validation strips unknown keys (incl. any client `tenantId`) | ✅ |
 | Request ids: client value accepted only if `[\w-]{8,64}` | ✅ |
 | Logger redacts `authorization`, cookies, passwords, tokens, OTPs | ✅ |
 | Config validated at startup; process refuses to boot misconfigured | ✅ |
 
-## Authentication & sessions ⬜ M2
-- Passwords hashed with scrypt (N=2^15) + per-password salt; constant-time compare.
-- Access JWT 15 min (HS256, `tid`, `sub`, `role`, `sid`); refresh token random 256-bit, stored only as
-  SHA-256 hash, rotated on every use, family revoked on reuse.
-- Refresh cookie: host-only, `HttpOnly`, `Secure`, `SameSite=Lax`, path `/api/v1/auth`.
-- Login responses identical for "no such user" and "wrong password"; per-account lockout and
-  per-IP+identifier rate limits.
-- Password reset: single-use hashed tokens, 30-min TTL, all sessions revoked on reset.
-- Tokens issued before `passwordChangedAt` rejected.
+## Authentication & sessions ✅ M2
+
+| Control | Status |
+|---|---|
+| scrypt (N=2^15, r=8, p=1), 16-byte salt, timing-safe compare, NFKC-normalised, 128-char cap; parameters stored in the hash and upgraded on login | ✅ |
+| Unknown account and wrong password: same status, code, message, and timing (dummy hash) | ✅ |
+| Lockout after 5 failures (atomic counter), 15 min; reset clears it | ✅ |
+| Access JWT: HS256 only (`alg` pinned), issuer + audience checked, 15 min, claims `sub sid typ tid role` | ✅ |
+| Every request re-checks the session (logout is immediate) and loads role/permissions from the DB (demotion/disable is immediate) | ✅ |
+| Refresh token: 256-bit random, stored only as SHA-256, rotated on every use, atomic rotation | ✅ |
+| Replay of an old refresh token (after a 20 s tab-race grace) revokes the whole session | ✅ |
+| Refresh cookie: `HttpOnly`, `SameSite=Lax`, host-only (`__Host-` prefix + `Secure` in production), never in a response body | ✅ |
+| Cookie endpoints reject cross-origin / `Sec-Fetch-Site: cross-site` requests (CSRF between sibling gym subdomains) | ✅ |
+| Member email links: 256-bit, hashed at rest, single use (atomic consume, concurrent clicks give one session), 15 min, max 3 per 15 min, gym-bound | ✅ |
+| Link/forgot endpoints never reveal whether an email is registered | ✅ |
+| Password reset / invite: single use, 30 min / 72 h, ends all sessions, kills other outstanding links | ✅ |
+| Change password ends all other sessions | ✅ |
+| Sessions list / revoke limited to the caller's own sessions (IDOR test) | ✅ |
+| Super admin has no email reset; reset only via `admin:create --reset` on the server | ✅ |
+| `Cache-Control: no-store` on every response carrying tokens or `/me` | ✅ |
+| Production refuses to start with insecure cookies, a dev email transport, or http email links | ✅ |
+
+Notes for the frontend (Phase 2/3):
+- Keep the access token in memory only. Never `localStorage`.
+- The email link puts the token in the URL. The `/login/verify` page must POST it immediately, then
+  remove it from the address bar (`history.replaceState`), and send `Referrer-Policy: no-referrer`.
+- Verification is a POST from the page, not a GET, so email link-preview scanners can't burn the link.
 
 ## Payments ⬜ M6
 - Razorpay webhooks: HMAC-SHA256 over the **raw** body, timing-safe compare, event id de-duplicated.
@@ -71,3 +94,9 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
    must be invalidated on suspend.
 3. `npm audit`: 0 vulnerabilities in runtime dependencies; 10 moderate in dev-only ESLint tooling
    (not shipped). Re-check on each dependency update.
+4. Every authenticated request costs two indexed reads (session + user). Fine at pilot scale; a
+   short in-process cache is the first optimisation if needed.
+5. In development, the `log` email transport prints sign-in links to the API log. Production refuses
+   this transport.
+6. Members without an email address cannot use the member app. Front desk must collect an email at
+   registration (Milestone 4 will make this visible in the member form).

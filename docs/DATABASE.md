@@ -1,6 +1,6 @@
 # Database
 
-_Last updated: 2026-11-12 · Phase 1, Milestone 1_
+_Last updated: 2026-11-13 · Phase 1, Milestone 2_
 
 Shared MongoDB database, shared collections. Every tenant-owned collection uses `tenantScopePlugin`
 (`src/tenancy/tenant-scope.plugin.ts`), which adds a required, indexed, immutable `tenantId` and
@@ -40,7 +40,7 @@ Status legend: ✅ implemented & tested · 🟡 implemented, DB tests not yet ru
 
 ## Collections
 
-### tenants ✅ (model + unit-tested via HTTP; DB tests 🟡)
+### tenants ✅
 `src/modules/tenants/tenant.model.ts`
 
 | Field | Type | Notes |
@@ -58,20 +58,51 @@ Status legend: ✅ implemented & tested · 🟡 implemented, DB tests not yet ru
 
 Indexes: `{ slug: 1 } unique`, `{ customDomain: 1 } unique partial`, `{ status: 1 }`.
 
-### platformAdmins ⬜ M2
-`email` unique, `name`, `passwordHash`, `status`, `mfaEnabled` (later).
+### platformAdmins ✅ (not tenant-scoped)
+`src/modules/platform/platform-admin.model.ts`
 
-### users ⬜ M2 (tenant-scoped)
-`name`, `email?`, `phone`, `passwordHash`, `role` (`owner` / `staff` / `member`), `memberId?`,
-`permissions[]`, `status`, `lastLoginAt`, `failedLogins`, `lockedUntil`, `passwordChangedAt`, `archivedAt`.
-Indexes: `{ tenantId, phone } unique`, `{ tenantId, email } unique partial`, `{ tenantId, role }`.
+`name`, `email` (unique), `passwordHash` (hidden by default), `status` (`active`/`disabled`),
+`lastLoginAt`, `failedLogins`, `lockedUntil` (hidden), `passwordChangedAt`.
+Created and reset only by `npm run admin:create`.
+
+### users ✅ (tenant-scoped)
+`src/modules/users/user.model.ts`. Everyone who signs in **inside a gym**.
+
+| Field | Notes |
+|---|---|
+| name | required |
+| email | lowercase; **required for members** (they sign in by email link) |
+| phone | E.164 (`+919876543210`); owners/staff need email or phone |
+| passwordHash | hidden by default; **forbidden for members** |
+| role | `owner` / `staff` / `member` |
+| memberId | link to the member record (M4) |
+| permissions[] | extra grants for staff, filtered by `STAFF_GRANTABLE` |
+| status | `invited` / `active` / `disabled` |
+| lastLoginAt, failedLogins, lockedUntil, passwordChangedAt, archivedAt | |
+
+Indexes: `{ tenantId, email } unique partial`, `{ tenantId, phone } unique partial`,
+`{ tenantId, role, status }`. The same phone/email may exist in two gyms (tested).
+
+### sessions ✅ (tenant-scoped) · platformSessions ✅ (not scoped)
+`src/modules/auth/session.model.ts`. One document per signed-in device.
+
+`userId`, `refreshTokenHash` (SHA-256; unique), `previousRefreshHashes[]` (last 5, for theft
+detection), `rotatedAt`, `expiresAt` (**TTL index**: MongoDB deletes expired sessions), `revokedAt`,
+`revokedReason` (`logout` / `logout_all` / `token_reuse` / `password_changed` / `user_disabled` / `admin`),
+`lastUsedAt`, `userAgent`, `ip`.
+
+### authTokens ✅ (tenant-scoped)
+`src/modules/auth/auth-token.model.ts`. Single-use emailed links.
+
+`type` (`magic_link` / `password_reset` / `invite`), `userId`, `tokenHash` (unique per gym),
+`expiresAt`, `usedAt`, `requestedIp`. TTL: deleted 24 h after expiry.
 
 ### members ⬜ M4 (tenant-scoped)
-`memberCode`, `name`, `phone`, `email?`, `photoUrl`, `photoPublicId`, `dateOfBirth`, `gender`,
+`memberCode`, `name`, `phone`, `email?` (needed for app access), `photoUrl`, `photoPublicId`, `dateOfBirth`, `gender`,
 `joinDate`, `status`, `emergencyContact { name, phone, relation }`, `consent`, `notes`, `archivedAt`.
 Indexes: `{ tenantId, phone } unique`, `{ tenantId, memberCode } unique`, `{ tenantId, status, joinDate }`,
 text-ish search via `{ tenantId, nameLower }` prefix index (Atlas Search later if needed).
 
-### plans ⬜ M5 · memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · auditLogs ⬜ M3 · sessions / authTokens ⬜ M2 · counters ⬜ M6 · jobLocks / notifications ⬜ M9
+### plans ⬜ M5 · memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · auditLogs ⬜ M3 · counters ⬜ M6 · jobLocks / notifications ⬜ M9
 
 Field lists as in the review table above; each gets its own section here when implemented.

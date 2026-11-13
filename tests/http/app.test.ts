@@ -139,11 +139,25 @@ describe('tenant resolution + public branding', () => {
 });
 
 describe('CORS', () => {
-  it('allows a configured exact origin and wildcard gym origins', async () => {
-    for (const origin of ['http://localhost:3000', 'https://powerhouse.yourapp.in']) {
-      const res = await request(app).get('/health').set('Origin', origin);
-      expect(res.headers['access-control-allow-origin']).toBe(origin);
-    }
+  it('allows a configured exact origin', async () => {
+    const res = await request(app).get('/health').set('Origin', 'http://localhost:3000');
+    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+  });
+
+  it("allows a gym's own origin on that gym's host", async () => {
+    const res = await request(app)
+      .get('/health')
+      .set('Host', 'powerhouse.yourapp.in')
+      .set('Origin', 'https://powerhouse.yourapp.in');
+    expect(res.headers['access-control-allow-origin']).toBe('https://powerhouse.yourapp.in');
+  });
+
+  it("refuses another gym's origin (no cross-gym credentialed calls)", async () => {
+    const res = await request(app)
+      .get('/health')
+      .set('Host', 'powerhouse.yourapp.in')
+      .set('Origin', 'https://fitzone.yourapp.in');
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   it('refuses unknown and look-alike origins', async () => {
@@ -153,7 +167,10 @@ describe('CORS', () => {
       'https://a.b.yourapp.in',
       'http://powerhouse.yourapp.in',
     ]) {
-      const res = await request(app).get('/health').set('Origin', origin);
+      const res = await request(app)
+        .get('/health')
+        .set('Host', 'powerhouse.yourapp.in')
+        .set('Origin', origin);
       expect(res.headers['access-control-allow-origin']).toBeUndefined();
     }
   });

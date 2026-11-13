@@ -31,6 +31,27 @@ export const Errors = {
     new AppError(400, 'TENANT_REQUIRED', 'This endpoint must be called on a gym domain'),
   tenantSuspended: () =>
     new AppError(403, 'TENANT_SUSPENDED', 'This gym account is suspended. Contact support.'),
+
+  // --- authentication ---
+  /** Same response for unknown user and wrong password: no account enumeration. */
+  invalidCredentials: () =>
+    new AppError(401, 'INVALID_CREDENTIALS', 'Incorrect email/phone or password'),
+  loginLocked: (minutes: number) =>
+    new AppError(
+      429,
+      'LOGIN_LOCKED',
+      `Too many failed attempts. Try again in ${minutes} minutes or reset your password.`,
+    ),
+  accountDisabled: () =>
+    new AppError(403, 'ACCOUNT_DISABLED', 'This account has been disabled. Contact your gym.'),
+  tokenExpired: () => new AppError(401, 'TOKEN_EXPIRED', 'Access token expired'),
+  invalidLink: () =>
+    new AppError(400, 'INVALID_LINK', 'This link is invalid or has expired. Request a new one.'),
+  invalidRefresh: () =>
+    new AppError(401, 'INVALID_REFRESH', 'Session expired. Please sign in again.'),
+  refreshRace: () =>
+    new AppError(401, 'REFRESH_RACE', 'Session was refreshed by another tab. Retry the request.'),
+  csrfRejected: () => new AppError(403, 'CROSS_ORIGIN_REJECTED', 'Cross-origin request rejected'),
 };
 
 /**

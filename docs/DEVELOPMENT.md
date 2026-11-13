@@ -13,7 +13,9 @@
 ## Setup
 ```bash
 npm install
-cp .env.example .env   # then edit MONGODB_URI
+cp .env.example .env   # set MONGODB_URI and JWT_ACCESS_SECRET (openssl rand -base64 48)
+npm run db:indexes
+npm run seed           # 2 demo gyms + super admin; prints the demo password
 npm run dev            # http://localhost:4000
 ```
 
@@ -23,7 +25,15 @@ Browsers resolve `*.localhost` to 127.0.0.1, so gym subdomains work without edit
 curl http://powerhouse.localhost:4000/api/v1/public/tenant
 curl -H 'Host: fitzone.localhost' http://127.0.0.1:4000/api/v1/public/tenant
 ```
-(Seed data arrives in Milestone 2; until then insert a tenant with `mongosh`.)
+Sign in as the demo owner, then as a member by email link (the link appears in the API log):
+```bash
+curl -c jar -H 'Host: powerhouse.localhost' -H 'Content-Type: application/json' \
+  -d '{"identifier":"owner@powerhouse.demo","password":"<seed password>"}' \
+  http://127.0.0.1:4000/api/v1/auth/login
+curl -H 'Host: powerhouse.localhost' -H 'Content-Type: application/json' \
+  -d '{"email":"arjun@member.demo"}' http://127.0.0.1:4000/api/v1/auth/magic-link
+```
+The super admin signs in on `admin.localhost:4000`.
 
 ## Scripts
 | Script | What it does |
@@ -34,6 +44,9 @@ curl -H 'Host: fitzone.localhost' http://127.0.0.1:4000/api/v1/public/tenant
 | `npm run lint` | ESLint |
 | `npm run format` | Prettier |
 | `npm run build` / `npm start` | compile to `dist/` and run it |
+| `npm run seed` | demo data (refuses in production, never overwrites) |
+| `npm run admin:create -- --email … --name …` | create a super admin (`--reset` for a new password) |
+| `npm run db:indexes` | create missing indexes (additive only) |
 
 ## Tests
 - `tests/unit` — pure logic (host parsing, env, tenant plugin without a DB).
@@ -41,6 +54,7 @@ curl -H 'Host: fitzone.localhost' http://127.0.0.1:4000/api/v1/public/tenant
 - `tests/integration/*.int.test.ts` — real MongoDB. Started by `tests/helpers/global-setup.ts`:
   - `MONGO_TEST_URI` set → uses it;
   - otherwise starts `mongodb-memory-server` (downloads MongoDB once, ~100 MB, cached);
+    if the download is blocked, point it at an existing binary with `MONGOMS_SYSTEM_BINARY=/path/to/mongod`;
   - if neither works, DB suites are **skipped with a warning**. Set `REQUIRE_DB=1` (always in CI) to
     make that a failure instead.
 

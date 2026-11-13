@@ -4,9 +4,13 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { pinoHttp } from 'pino-http';
 import type { Env } from './config/env.js';
+import type { JwtConfig } from './auth/jwt.js';
 import type { Logger } from './lib/logger.js';
+import type { Mailer } from './lib/mailer.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
+import { authRouter } from './modules/auth/auth.routes.js';
+import { createAuthService } from './modules/auth/auth.service.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { publicTenantRouter } from './modules/tenants/public.routes.js';
 import { resolveTenant, type TenantLookup } from './tenancy/resolver.middleware.js';
@@ -16,11 +20,12 @@ export interface AppDeps {
   logger: Logger;
   tenantLookup: TenantLookup;
   isDbReady: () => boolean;
+  mailer: Mailer;
 }
 
 /**
- * Builds the Express app. Dependencies are injected so tests can run the full HTTP pipeline
- * with a stubbed tenant lookup and no database.
+ * Builds the Express app. Dependencies are injected so tests can swap the tenant lookup,
+ * mailer and database readiness check.
  *
  * Pipeline order (matches the architecture doc):
  *   security headers → request id/logging → CORS → rate limit → body parsing
@@ -81,9 +86,17 @@ export function createApp(deps: AppDeps) {
     }),
   );
 
+  const jwt: JwtConfig = {
+    secret: env.JWT_ACCESS_SECRET,
+    issuer: env.JWT_ISSUER,
+    ttlSec: env.ACCESS_TOKEN_TTL_SEC,
+  };
+  const auth = createAuthService({ env, mailer: deps.mailer, logger });
+
   const v1 = express.Router();
   v1.use('/public', publicTenantRouter());
-  // Milestone 2+: v1.use('/auth', ...), v1.use('/members', ...), etc.
+  v1.use('/auth', authRouter({ env, jwt, auth }));
+  // Milestone 3+: v1.use('/platform', ...), v1.use('/members', ...), etc.
   app.use('/api/v1', v1);
 
   app.use(notFoundHandler);
