@@ -7745,7 +7745,7 @@
           "uploads"
         ],
         "summary": "POST /api/v1/uploads/signature",
-        "description": "",
+        "description": "Requires one of: `branding:update`, `members:update`.",
         "security": [
           {
             "bearerAuth": []

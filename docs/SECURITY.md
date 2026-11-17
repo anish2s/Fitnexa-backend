@@ -174,6 +174,22 @@ Notes for the frontend (Phase 2/3):
 | Personal values masked in audit `changes`; reminder queue stores no address or text | ✅ |
 | PII never in URLs; PWA never caches authenticated API responses | ⬜ Phase 3 |
 
+## Phase 1 security review (M10, 2026-11-17)
+
+Reviewed every control in this document against the code and tests, plus:
+
+| Area | Result |
+|---|---|
+| **Route audit (automated, every route read from the real routers)** — only 11 deliberate public routes; every gym route checks a permission (6 self-service exceptions listed in the test); every platform route needs a super admin; every `:id` validated; every write with a body validated; money routes require `Idempotency-Key`; irreversible/payout routes blocked while impersonating | ✅ `tests/http/route-security.test.ts` (fails CI if a new route breaks a rule) |
+| Personal data in logs: request log keeps query **values** only for safe keys (`q`, WhatsApp `text`, … → `[redacted]`); headers not logged | ✅ fixed in M10 |
+| Caching: every `/api/v1` response defaults to `Cache-Control: no-store` (some handlers had forgotten); public branding/OpenAPI opt in | ✅ fixed in M10 |
+| Secrets: none in tracked files or git history (only a deliberately fake `rzp_live_` value in a test); `.env` ignored, mode 600 | ✅ |
+| Dependencies: `npm audit` 0 (runtime and dev); in-range updates applied; majors deferred (TypeScript 7, pdfkit 0.20, @types/node 26 ≠ Node 22) | ✅ |
+| Input: Zod everywhere (unknown keys stripped), `query parser: simple`, `strictQuery`, escaped search regexes (no ReDoS), JSON 100 kb / CSV 1 MB caps | ✅ |
+| Errors: central handler, opaque 500s, duplicate-key values never echoed | ✅ |
+| Third parties verified live: MongoDB, Cloudinary (tampered upload path refused by Cloudinary) | ✅ |
+| Not verifiable yet: Resend live email, Razorpay live test payment (no credentials); HTTPS/HSTS/proxy chain (needs the real host) | 🟡 |
+
 ## Open findings
 1. Rate limiter is in-memory per instance: fine for the single-instance pilot; revisit if scaling out.
 2. Tenant lookup runs on every request (indexed). Add a small TTL cache if profiling shows need; cache
@@ -212,3 +228,7 @@ Notes for the frontend (Phase 2/3):
     written before an erasure may still contain the member's *name* as an actor (e.g. a self-service
     update); they expire with the audit log's 1-year retention. The member's own export leaves out
     staff notes; the owner's export includes them, so the gym can answer a formal access request.
+16. The global rate limit (300 requests/min per IP) also applies to Razorpay webhooks, which arrive
+    from a few shared Razorpay IPs for all gyms. Fine for the pilot (a limited webhook is retried by
+    Razorpay, and the browser `verify` call records the payment anyway); exempt the webhook path or
+    raise its limit when online payments grow.

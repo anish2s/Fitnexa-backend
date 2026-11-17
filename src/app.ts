@@ -59,6 +59,39 @@ export interface AppDeps {
  *   security headers → request id/logging → CORS → rate limit → body parsing
  *   → tenant resolution → [auth → RBAC → validation → service] → 404 → error handler
  */
+const SAFE_QUERY_KEYS = new Set([
+  'page',
+  'limit',
+  'status',
+  'sort',
+  'groupBy',
+  'from',
+  'to',
+  'date',
+  'days',
+  'template',
+  'kind',
+  'method',
+  'archived',
+  'due',
+  'dryRun',
+  'consentConfirmed',
+  'role',
+  'action',
+  'purpose',
+]);
+
+/** `/members?q=98111&page=2` → `/members?q=[redacted]&page=2` */
+export function redactQuery(url: string): string {
+  const i = url.indexOf('?');
+  if (i < 0) return url;
+  const params = new URLSearchParams(url.slice(i + 1));
+  const parts = [...params.keys()].map((k) =>
+    SAFE_QUERY_KEYS.has(k) ? `${k}=${encodeURIComponent(params.get(k) ?? '')}` : `${k}=[redacted]`,
+  );
+  return `${url.slice(0, i)}?${parts.join('&')}`;
+}
+
 export function createApp(deps: AppDeps) {
   const { env, logger } = deps;
   const app = express();
@@ -79,6 +112,15 @@ export function createApp(deps: AppDeps) {
         return id;
       },
       autoLogging: { ignore: (req) => req.url === '/health' },
+      // Query strings can carry personal data (member search, WhatsApp text): log values only for
+      // known-safe parameters. Headers are left out entirely (tokens/cookies are redacted anyway).
+      serializers: {
+        req: (req: { id: unknown; method: string; url: string }) => ({
+          id: req.id,
+          method: req.method,
+          url: redactQuery(req.url),
+        }),
+      },
     }),
   );
   app.use(corsMiddleware(env.CORS_ORIGINS));
@@ -137,6 +179,12 @@ export function createApp(deps: AppDeps) {
   const v1 = express.Router();
   /** Every router mounted under /api/v1, recorded for the OpenAPI document and the route audit. */
   const mounts: MountedRouter[] = [];
+  // API responses carry personal and financial data: never cached unless a route opts in
+  // (public branding, the OpenAPI document).
+  v1.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
   const mount = (path: string, router: express.Router) => {
     mounts.push({ base: '/api/v1', path, router });
     v1.use(path, router);

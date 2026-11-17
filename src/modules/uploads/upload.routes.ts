@@ -6,6 +6,7 @@ import { randomImageName, type ImageStore } from '../../lib/image-store.js';
 import { ok } from '../../lib/response.js';
 import { authenticate, authorize } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
+import { tag } from '../../lib/route-meta.js';
 import { Member } from '../members/member.model.js';
 import { signatureBody, type SignatureInput } from './upload.schemas.js';
 
@@ -21,8 +22,13 @@ const PERMISSION: Record<SignatureInput['purpose'], Permission> = {
  */
 export function uploadRouter(deps: { jwt: JwtConfig; images: ImageStore | null }) {
   const router = Router();
-  const byPurpose: RequestHandler = (req, res, next) =>
-    authorize(PERMISSION[(req.valid.body as SignatureInput).purpose])(req, res, next);
+  // The permission depends on what is being uploaded; tagged so the route audit and the OpenAPI
+  // document see that a permission is enforced here.
+  const byPurpose: RequestHandler = tag(
+    (req, res, next) =>
+      authorize(PERMISSION[(req.valid.body as SignatureInput).purpose])(req, res, next),
+    { kind: 'authorizeAny', any: [...new Set(Object.values(PERMISSION))] },
+  );
 
   router.post(
     '/signature',
