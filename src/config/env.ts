@@ -88,6 +88,13 @@ export const envSchema = z
     MAIL_FROM: z.string().trim().min(3).default('Gym App <no-reply@localhost>'),
     RESEND_API_KEY: z.string().trim().optional(),
 
+    // --- Scheduled jobs (renewal reminders) ---
+    /** Run cron jobs in this process. Safe with several instances (Mongo lease lock). */
+    JOBS_ENABLED: z
+      .enum(['true', 'false', '1', '0'])
+      .default('true')
+      .transform((v) => v === 'true' || v === '1'),
+
     // --- Attendance QR ---
     /**
      * Signs members' rotating QR passes (per-gym keys are derived from it). Optional: defaults to a

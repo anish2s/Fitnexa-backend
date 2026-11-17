@@ -128,6 +128,11 @@ upsert. Keys: `memberCode`, `receipt:<financial year>` (e.g. `receipt:2026-27`),
 `day` (gym-local `YYYY-MM-DD`), `hour` (gym-local 0–23), `checkedInAt`, `method` (`qr/manual`), `recordedBy`.
 Indexes: `{ tenantId, memberId, day } unique` (one visit per member per day), `{ tenantId, day, checkedInAt }`.
 
+### jobLocks ✅ (platform, not scoped)
+`src/jobs/job-lock.model.ts`. `_id` = job name, `lockedUntil`, `owner` (host:pid:random),
+`lastStartedAt`, `lastFinishedAt`, `lastError`, `lastSummary`. A job runs only while holding the
+lease (atomic upsert; a held lock makes the insert collide), so N instances run each job once.
+
 ### plans ✅ (tenant-scoped)
 `src/modules/plans/plan.model.ts`. `name`, `nameKey` (lower-cased), `description`, `duration` (`monthly/quarterly/half_yearly/yearly`), `months` (1/3/6/12, for sorting),
 `pricePaise`, `taxMode` (`inclusive/exclusive/none`), `gstRate` (0/5/12/18/28), `archivedAt` (explicit
@@ -154,6 +159,6 @@ Indexes: `{ tenantId, receiptNumber } unique`, `{ tenantId, idempotencyKey } uni
 `{ tenantId, gateway.paymentId } unique partial`, `{ tenantId, membershipId, receivedAt }`,
 `{ tenantId, memberId, receivedAt: -1 }`, `{ tenantId, receivedAt: -1 }`, `{ tenantId, refunds.refundedAt }` (revenue report).
 Written only by `payment.ledger.ts` inside a transaction that also updates `memberships.paidPaise`
-and the `receipt:<FY>` counter. Memberships gained `paidPaise` and index `{ tenantId, cancelledAt, paidPaise }`. · jobLocks / notifications ⬜ M9
+and the `receipt:<FY>` counter. Memberships gained `paidPaise` and index `{ tenantId, cancelledAt, paidPaise }`. · notifications ⬜ M9
 
 Field lists as in the review table above; each gets its own section here when implemented.

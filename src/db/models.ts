@@ -15,3 +15,4 @@ export { Membership } from '../modules/memberships/membership.model.js';
 export { Payment } from '../modules/payments/payment.model.js';
 export { PaymentOrder, WebhookEvent } from '../modules/payments/payment-order.model.js';
 export { Attendance } from '../modules/attendance/attendance.model.js';
+export { JobLock } from '../jobs/job-lock.model.js';

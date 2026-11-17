@@ -24,7 +24,7 @@ const TENANT_SCOPED = [
   'User',
   'WebhookEvent',
 ];
-const PLATFORM_ONLY = ['PlatformAdmin', 'PlatformAuditLog', 'PlatformSession', 'Tenant'];
+const PLATFORM_ONLY = ['JobLock', 'PlatformAdmin', 'PlatformAuditLog', 'PlatformSession', 'Tenant'];
 
 const { mailer, call, tokenFor } = intApp();
 const scopedModels = () =>
