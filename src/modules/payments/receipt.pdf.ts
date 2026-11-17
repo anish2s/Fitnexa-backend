@@ -19,7 +19,7 @@ export interface ReceiptData {
   receiptNumber: string;
   /** Formatted in the gym's time zone, e.g. "17 Nov 2026, 6:45 pm". */
   receivedAtText: string;
-  member: { name: string; memberCode: string; phone: string };
+  member: { name: string; memberCode: string; phone?: string | null };
   membership: {
     planName: string;
     periodText: string;
@@ -105,7 +105,7 @@ export function renderReceiptPdf(
     row('Receipt no.', d.receiptNumber, true);
     row('Date', d.receivedAtText);
     row('Received from', `${d.member.name} (${d.member.memberCode})`);
-    row('Phone', d.member.phone);
+    if (d.member.phone) row('Phone', d.member.phone);
     rule();
 
     const m = d.membership;

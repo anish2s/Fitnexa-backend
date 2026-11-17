@@ -502,7 +502,7 @@ export function createMembershipService(deps: { audit: AuditService; env?: Env }
               id: String(m._id),
               memberCode: m.memberCode,
               name: m.name,
-              phone: m.phone,
+              phone: m.phone ?? null,
               photoUrl: m.photoUrl ?? null,
               archived: Boolean(m.archivedAt),
             }
@@ -605,7 +605,7 @@ export function createMembershipService(deps: { audit: AuditService; env?: Env }
       : null;
     return {
       items: items.map((row) => {
-        if (!gym || !row.member) return { ...row, whatsappUrl: null };
+        if (!gym || !row.member?.phone) return { ...row, whatsappUrl: null };
         const text = messageFor('renewal', {
           gymName: gym.name,
           appUrl: deps.env!.GYM_APP_URL_TEMPLATE.replace('{slug}', gym.slug),

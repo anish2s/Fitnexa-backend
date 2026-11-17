@@ -18,7 +18,14 @@ const memberSchema = new Schema(
     memberCode: { type: String, required: true, maxlength: 20 },
     name: { type: String, required: true, trim: true, minlength: 1, maxlength: 120 },
     /** E.164. Required: the front desk's primary way to find and contact a member. */
-    phone: { type: String, required: true, match: /^\+[1-9]\d{7,14}$/ },
+    phone: {
+      type: String,
+      match: /^\+[1-9]\d{7,14}$/,
+      // Every live member has a phone; only an erased (DPDP) record has none.
+      required: function (this: { erasedAt?: Date | null }) {
+        return !this.erasedAt;
+      },
+    },
     email: { type: String, trim: true, lowercase: true, maxlength: 254 },
     gender: { type: String, enum: GENDERS },
     dateOfBirth: { type: Date },
@@ -45,14 +52,20 @@ const memberSchema = new Schema(
      */
     membershipRev: { type: Number, default: 0, select: false },
     archivedAt: { type: Date },
+    /** Set when the member's personal data was erased on request (DPDP). Irreversible. */
+    erasedAt: { type: Date },
   },
   { timestamps: true },
 );
 
 memberSchema.plugin(tenantScopePlugin);
 memberSchema.index({ tenantId: 1, memberCode: 1 }, { unique: true });
-// Archived members keep their phone/email reserved; restoring them must not collide.
-memberSchema.index({ tenantId: 1, phone: 1 }, { unique: true });
+// Archived members keep their phone/email reserved; restoring them must not collide. Partial, so
+// erased members (no phone) don't collide with each other.
+memberSchema.index(
+  { tenantId: 1, phone: 1 },
+  { unique: true, partialFilterExpression: { phone: { $type: 'string' } } },
+);
 memberSchema.index(
   { tenantId: 1, email: 1 },
   { unique: true, partialFilterExpression: { email: { $type: 'string' } } },

@@ -106,9 +106,10 @@ detection), `rotatedAt`, `expiresAt` (**TTL index**: MongoDB deletes expired ses
 `memberCode` (`M0001`), `name`, `phone` (E.164, required), `email?`, `gender?`
 (`male/female/other/undisclosed`), `dateOfBirth?`, `joinDate` (calendar dates stored as UTC midnight),
 `emergencyContact { name, phone, relation }`, `notes` (staff only), `photoUrl`, `photoPublicId`,
-`consent { at, version, recordedBy }`, `userId` (linked member login, when there is an email), `archivedAt`.
+`consent { at, version, recordedBy }`, `userId` (linked member login, when there is an email), `archivedAt`,
+`erasedAt` (DPDP erasure; phone is required unless set).
 
-Indexes: `{ tenantId, memberCode } unique`, `{ tenantId, phone } unique`,
+Indexes: `{ tenantId, memberCode } unique`, `{ tenantId, phone } unique partial (phone is a string)`,
 `{ tenantId, email } unique partial`, `{ tenantId, archivedAt, joinDate: -1 }`, `{ tenantId, userId }`.
 A member's login is a `users` document (role `member`, `memberId` back-reference), created, updated and
 disabled in the same transaction as the member.
@@ -170,3 +171,10 @@ Written only by `payment.ledger.ts` inside a transaction that also updates `memb
 and the `receipt:<FY>` counter. Memberships gained `paidPaise` and index `{ tenantId, cancelledAt, paidPaise }`.
 
 Field lists as in the review table above; each gets its own section here when implemented.
+
+## Index migrations
+`npm run db:indexes` only adds indexes. When an index's options change, drop the old one once by hand:
+
+| Date | Collection | Change | Command (mongosh) |
+|---|---|---|---|
+| 2026-11-17 | `members` | `tenantId_1_phone_1` became partial (erased members have no phone) | `db.members.dropIndex("tenantId_1_phone_1")` then `npm run db:indexes` |

@@ -148,7 +148,7 @@ export function createPaymentService(deps: { audit: AuditService; gateway?: Gate
       return {
         ...toPaymentView(p),
         member: m
-          ? { id: String(m._id), memberCode: m.memberCode, name: m.name, phone: m.phone }
+          ? { id: String(m._id), memberCode: m.memberCode, name: m.name, phone: m.phone ?? null }
           : null,
       };
     });

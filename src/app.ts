@@ -30,6 +30,7 @@ import { notificationRouter } from './modules/notifications/notification.routes.
 import { createNotificationService } from './modules/notifications/notification.service.js';
 import { reportRouters } from './modules/reports/report.routes.js';
 import { whatsappRouter } from './modules/whatsapp/whatsapp.routes.js';
+import { privacyRouter } from './modules/privacy/privacy.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
 import { uploadRouter } from './modules/uploads/upload.routes.js';
 import { gymRouter } from './modules/tenants/gym.routes.js';
@@ -147,6 +148,7 @@ export function createApp(deps: AppDeps) {
   const pay = paymentRouters({ jwt, audit, gateway });
   v1.use('/members', ms.perMember);
   v1.use('/members', whatsappRouter({ jwt, env }));
+  v1.use('/members', privacyRouter({ jwt, audit, images, logger }));
   const att = attendanceRouters({ jwt, passes: createPassSigner(qrMasterSecret(env)) });
   v1.use('/members', att.perMember);
   v1.use('/attendance', att.attendance);

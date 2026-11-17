@@ -167,7 +167,7 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
 `member.photo_remove`, `member.import`, `plan.create`, `plan.update`, `plan.archive`, `plan.restore`, `membership.create`, `membership.renew`,
 `membership.cancel`, `payment.record`, `payment.refund`, `payment.refund_failed`,
-`gym.payment_gateway_update`, `gym.payment_gateway_remove`, `notification.retry`, `notification.cancel`. Member names, birth dates,
+`gym.payment_gateway_update`, `gym.payment_gateway_remove`, `notification.retry`, `notification.cancel`, `member.export`, `member.self_export`, `member.erase`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -456,6 +456,21 @@ it and sends from the gym's own WhatsApp; the server sends nothing and there is 
 - `welcome`: member code and app link; `custom`: your own `text` (≤ 1000 chars)
 - `409` for `renewal`/`payment_due` when the member has no membership.
 - `GET /memberships/expiring` rows include a ready `whatsappUrl` (renewal message).
+
+## Privacy — DPDP (gym host)
+
+| Method & path | Who | Result |
+|---|---|---|
+| `GET /members/:id/export` | owner (`privacy:manage`) | JSON download of everything held: profile, consent, login (no secrets), memberships, payments + refunds, attendance, reminders |
+| `GET /members/me/export` | member (`self:read`) | the same for themselves, without staff-internal notes |
+| `POST /members/:id/erase` | owner (`privacy:manage`), not while impersonated | body `{ confirmMemberCode, reason }` → `{ memberCode, erasedAt, removed[], retained[] }` |
+
+**Erase is irreversible.** Removed: name (becomes "Erased member M0005"), phone, email, birth date,
+gender, emergency contact, notes (also on memberships/payments), photo (deleted from storage), the
+member-app login, sessions, sign-in links, reminders. Kept, anonymised: member code, join date,
+memberships, payments, refunds, receipt numbers (tax records), attendance dates, consent record.
+Afterwards the member is archived and can't be restored or edited; their phone/email can be used by
+a new registration. `privacy:manage` can't be granted to staff.
 
 ## Image uploads — `/api/v1/uploads` (gym host)
 

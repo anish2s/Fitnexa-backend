@@ -32,6 +32,7 @@ export async function whatsappContext(env: Env, memberId: string) {
     Member.findById(memberId).select('name memberCode phone archivedAt').lean(),
   ]);
   if (!member) throw Errors.notFound('Member');
+  if (!member.phone) throw Errors.conflict('This member has no phone number');
   const { today } = await gymCalendar();
   const s = await membershipSummary(member._id, today);
   const cur = s.current;

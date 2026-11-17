@@ -161,11 +161,18 @@ Notes for the frontend (Phase 2/3):
 | Queue stores no address or text; conditions re-checked at send time (renewed/archived/no email) | ✅ |
 | No email to members outside 09:00–20:00 gym time; owner can switch reminders off | ✅ |
 
-## Privacy (DPDP Act 2023) ⬜ M9
-- Collect the minimum: DOB/gender optional; no ID documents stored. ✅ M4
-- Consent recorded with timestamp and version at registration. ✅ M4
-- Export (JSON) and erase (anonymise financial records, delete photo) endpoints for owners.
-- PII never in URLs; PWA never caches authenticated API responses (Phase 3).
+## Privacy (DPDP Act 2023) ✅ M9
+
+| Control | Status |
+|---|---|
+| Collect the minimum: DOB/gender optional; no ID documents stored | ✅ M4 |
+| Consent recorded with timestamp, wording version and recorder at registration | ✅ M4 |
+| Right of access: owner export of everything held about a member; member self-export (without staff-internal notes); both audited | ✅ |
+| Right to erasure: personal fields, photo (deleted from storage), login, sessions, sign-in links and reminders removed in one transaction; financial and attendance records kept anonymised | ✅ |
+| Erase is owner-only (`privacy:manage`, not grantable), blocked while impersonated, needs the member code typed back; irreversible (no restore, no edits) | ✅ |
+| Erase audit entry holds only member code and reason | ✅ |
+| Personal values masked in audit `changes`; reminder queue stores no address or text | ✅ |
+| PII never in URLs; PWA never caches authenticated API responses | ⬜ Phase 3 |
 
 ## Open findings
 1. Rate limiter is in-memory per instance: fine for the single-instance pilot; revisit if scaling out.
@@ -200,3 +207,8 @@ Notes for the frontend (Phase 2/3):
 14. A pass shared within its ~60–90 s life could let a friend in if the member hasn't checked in that
     day yet. The desk sees the member's photo on every scan to catch this; adding photos (Cloudinary)
     makes the check real.
+15. **Erasure and retained records (CA/lawyer to confirm):** payments, refunds and receipts are kept
+    (anonymised) because Indian tax law requires keeping financial records for years. Audit entries
+    written before an erasure may still contain the member's *name* as an actor (e.g. a self-service
+    update); they expire with the audit log's 1-year retention. The member's own export leaves out
+    staff notes; the owner's export includes them, so the gym can answer a formal access request.

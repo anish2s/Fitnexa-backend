@@ -38,7 +38,8 @@ First deploy only, create your super admin (password from ADMIN_PASSWORD or prin
 ```bash
 npm run admin:create:prod -- --email you@yourapp.in --name "Your Name"
 ```
-Never run `npm run seed` against production (it refuses).
+Never run `npm run seed` against production (it refuses). If DATABASE.md lists an index migration
+newer than the database, run it before `db:indexes`.
 
 ## Required secrets
 `JWT_ACCESS_SECRET` (`openssl rand -base64 48`), `MONGODB_URI`, `RESEND_API_KEY`.

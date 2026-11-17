@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–8 complete and verified against a real MongoDB 8.0 (live email, image upload and Razorpay round trip need credentials). Milestone 9 next.**
+**Phase 1 — Backend. Milestones 1–9 complete and verified against a real MongoDB 8.0 (live email, image upload and Razorpay round trip need credentials). Milestone 10 (hardening + Phase 1 gate) next.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -88,10 +88,10 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] KPIs: total/active/new members, revenue this/last month (owner/reports:read only), today's attendance + rate, pending renewals (expiring soon, recently lapsed), dues outstanding
 - [x] Reports: revenue, memberships, attendance, growth, renewals: gym-local date range ≤ 366 days, day/week/month, zero-filled; 11 integration + 5 unit tests; compiled-server smoke 8/8
 
-### M9 — Jobs, notifications, privacy
+### M9 — Jobs, notifications, privacy ✅
 - [x] node-cron + Mongo lease lock (jobs run once across instances); renewal reminder queue (expiring + expired) with retries/backoff, send hours, send-time re-checks, owner queue view/retry/cancel, on/off setting; 4 runner + 8 reminder tests
 - [x] WhatsApp `wa.me` links (renewal, payment due, welcome, custom); ready link on every expiring-soon row; 7 tests
-- [ ] DPDP export / erase
+- [x] DPDP export (owner + member self) and erase (owner-only, confirmed, irreversible; personal data removed, financial/attendance records kept anonymised, photo deleted); 6 tests
 
 ### M10 — Hardening & Phase 1 gate
 - [ ] OpenAPI/Swagger from Zod schemas
@@ -143,3 +143,6 @@ depend on the backend.
   daily report. 327 tests passing; compiled-server smoke 7/7.
 - **2026-11-17** — M8 dashboard + five reports. Revenue on the dashboard is owner-only by default
   (front desk sees everything else). 343 tests passing; compiled-server smoke 8/8.
+- **2026-11-17** — M9: job runner with Mongo lease lock, renewal reminder emails (queue, retries,
+  send hours), WhatsApp links, DPDP export/erase. 368 tests passing. Local dev databases need one
+  index migration (see DATABASE.md "Index migrations").

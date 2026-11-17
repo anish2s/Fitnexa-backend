@@ -60,7 +60,7 @@ function toListItem(m: LeanMember) {
     id: String(m._id),
     memberCode: m.memberCode,
     name: m.name,
-    phone: m.phone,
+    phone: m.phone ?? null,
     email: m.email ?? null,
     photoUrl: m.photoUrl ?? null,
     joinDate: formatDateOnly(m.joinDate),
@@ -78,7 +78,7 @@ function toSelfView(m: LeanMember) {
   return {
     memberCode: m.memberCode,
     name: m.name,
-    phone: m.phone,
+    phone: m.phone ?? null,
     email: m.email ?? null,
     gender: m.gender ?? null,
     dateOfBirth: formatDateOnly(m.dateOfBirth),
@@ -363,6 +363,9 @@ export function createMemberService(deps: { audit: AuditService; images: ImageSt
 
   async function setArchived(id: string, archive: boolean, ctx: AuditContext) {
     const before = await load(id);
+    if (!archive && (before as { erasedAt?: Date }).erasedAt) {
+      throw Errors.conflict('This member was erased and cannot be restored');
+    }
     if (Boolean(before.archivedAt) === archive) {
       throw Errors.conflict(archive ? 'Member is already archived' : 'Member is not archived');
     }

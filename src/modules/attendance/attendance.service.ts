@@ -31,7 +31,7 @@ const memberCard = (m: LeanMember) => ({
   id: String(m._id),
   name: m.name,
   memberCode: m.memberCode,
-  phone: m.phone,
+  phone: m.phone ?? null,
   /** Shown at the desk so staff can see the pass belongs to the person in front of them. */
   photoUrl: m.photoUrl ?? null,
 });

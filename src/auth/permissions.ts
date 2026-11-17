@@ -33,6 +33,8 @@ export const PERMISSIONS = [
   'dashboard:read',
   'reports:read',
   'audit:read',
+  /** DPDP export/erase of a member's data. Owner only: deliberately not grantable to staff. */
+  'privacy:manage',
   'renewals:manage',
   // member self-service (PWA)
   'self:read',

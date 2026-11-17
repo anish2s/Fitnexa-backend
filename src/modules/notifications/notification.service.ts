@@ -262,7 +262,7 @@ export function createNotificationService(deps: {
           createdAt: n.createdAt ?? null,
           membershipId: String(n.membershipId),
           member: m
-            ? { id: String(m._id), name: m.name, memberCode: m.memberCode, phone: m.phone }
+            ? { id: String(m._id), name: m.name, memberCode: m.memberCode, phone: m.phone ?? null }
             : null,
         };
       }),
