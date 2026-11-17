@@ -109,7 +109,7 @@ describe('permissions', () => {
   it('owners hold every gym permission; members only self-service', () => {
     expect(ROLE_PERMISSIONS.owner).toContain('staff:manage');
     expect(ROLE_PERMISSIONS.owner).not.toContain('self:read');
-    expect([...effectivePermissions('member')]).toEqual(['self:read', 'self:update']);
+    expect([...effectivePermissions('member')]).toEqual(['self:read', 'self:update', 'self:pay']);
   });
 
   it('staff grants are limited to the grantable list', () => {

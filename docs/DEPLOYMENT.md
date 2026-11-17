@@ -51,6 +51,16 @@ Optional at boot: without credentials, upload endpoints return `503 UPLOADS_NOT_
    `CLOUDINARY_FOLDER=gym-saas-prod` (dev defaults to `gym-saas-dev`, so the two never mix).
 No upload preset or CORS setup is needed: uploads are signed per request.
 
+## Online payments (Razorpay)
+Optional; desk payments never need it.
+1. `PAYMENTS_ENCRYPTION_KEY=$(openssl rand -base64 32)` in the secret store. **Back it up**: losing or
+   rotating it means every gym must re-enter its Razorpay keys.
+2. Leave `RAZORPAY_ALLOW_LIVE=false` until the owner approves real charges. Only `rzp_test_` keys
+   are accepted until then.
+3. Each gym owner: Razorpay dashboard → API keys (test mode) → paste Key Id + Key Secret in the gym
+   settings; Webhooks → add the URL shown in settings, a secret of their choice (same one in
+   settings), events `payment.captured`, `order.paid`, `refund.processed`, `refund.failed`.
+
 ## Email (Resend)
 Production refuses to start without a real email provider, because members sign in by email link.
 Provider: **Resend** (owner's choice, 2026-11-17), free plan (100 emails/day, 3,000/month).

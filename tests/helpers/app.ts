@@ -3,6 +3,17 @@ import { createApp } from '../../src/app.js';
 import { parseEnv, type Env } from '../../src/config/env.js';
 import { createLogger } from '../../src/lib/logger.js';
 import type { ImageStore } from '../../src/lib/image-store.js';
+import type { RazorpayClient } from '../../src/modules/payments/razorpay.client.js';
+
+/** Default for tests: any attempt to reach Razorpay fails loudly instead of touching the network. */
+const unreachableRazorpay: RazorpayClient = {
+  createOrder: async () => {
+    throw new Error('Razorpay is not available in tests; inject a fake');
+  },
+  refund: async () => {
+    throw new Error('Razorpay is not available in tests; inject a fake');
+  },
+};
 import { memoryMailer, type Mailer } from '../../src/lib/mailer.js';
 import type { ResolvedTenant, TenantLookup } from '../../src/tenancy/resolver.middleware.js';
 
@@ -60,6 +71,7 @@ export function buildTestApp(
     lookup?: TenantLookup;
     mailer?: Mailer;
     images?: ImageStore | null;
+    razorpay?: RazorpayClient;
   } = {},
 ) {
   return createApp({
@@ -69,5 +81,6 @@ export function buildTestApp(
     isDbReady: () => opts.dbReady ?? true,
     mailer: opts.mailer ?? memoryMailer(),
     images: opts.images === undefined ? null : opts.images,
+    razorpay: opts.razorpay ?? unreachableRazorpay,
   });
 }

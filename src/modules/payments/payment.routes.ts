@@ -8,6 +8,7 @@ import { membershipIdParams } from '../memberships/membership.schemas.js';
 import { createPaymentController } from './payment.controller.js';
 import * as s from './payment.schemas.js';
 import { createPaymentService } from './payment.service.js';
+import type { GatewayService } from './gateway.service.js';
 
 /**
  * Payments, mounted in three places (same service):
@@ -16,7 +17,11 @@ import { createPaymentService } from './payment.service.js';
  *  /members/:id/payments, /members/me/payments
  * Routers authenticate per route so they add nothing to requests they don't handle.
  */
-export function paymentRouters(deps: { jwt: JwtConfig; audit: AuditService }) {
+export function paymentRouters(deps: {
+  jwt: JwtConfig;
+  audit: AuditService;
+  gateway?: GatewayService;
+}) {
   const c = createPaymentController(createPaymentService(deps));
   const auth = authenticate(deps.jwt);
   const read = authorize('payments:read');

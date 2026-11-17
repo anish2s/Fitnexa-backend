@@ -3,6 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 import { Tenant } from '../../src/db/models.js';
 import type { ImageStore } from '../../src/lib/image-store.js';
+import type { RazorpayClient } from '../../src/modules/payments/razorpay.client.js';
 import { memoryMailer } from '../../src/lib/mailer.js';
 import { mongoTenantLookup } from '../../src/modules/tenants/tenant.lookup.js';
 import { seedDemo } from '../../src/scripts/seed.js';
@@ -14,12 +15,17 @@ export const PH = 'powerhouse.localhost';
 export const FZ = 'fitzone.localhost';
 export const PLATFORM = 'admin.localhost';
 
-export function intApp(env: Record<string, string> = {}, images: ImageStore | null = null) {
+export function intApp(
+  env: Record<string, string> = {},
+  images: ImageStore | null = null,
+  razorpay?: RazorpayClient,
+) {
   const mailer = memoryMailer();
   const app = buildTestApp({
     lookup: mongoTenantLookup,
     mailer,
     images,
+    razorpay,
     env: { AUTH_RATE_LIMIT_MAX: '1000', RATE_LIMIT_MAX: '100000', ...env },
   }) as Express;
 

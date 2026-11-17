@@ -35,6 +35,17 @@ export const Errors = {
       'Fix the rows listed and upload again. Nothing was imported.',
       report,
     ),
+  gatewayNotConfigured: () =>
+    new AppError(
+      503,
+      'PAYMENT_GATEWAY_NOT_CONFIGURED',
+      'Online payments are not set up on this server',
+    ),
+  gatewayNotConnected: () =>
+    new AppError(409, 'PAYMENT_GATEWAY_NOT_CONNECTED', 'Razorpay is not connected for this gym'),
+  gatewayError: (message: string) => new AppError(502, 'PAYMENT_GATEWAY_ERROR', message),
+  invalidSignature: () =>
+    new AppError(400, 'INVALID_SIGNATURE', 'Payment signature could not be verified'),
   uploadsNotConfigured: () =>
     new AppError(503, 'UPLOADS_NOT_CONFIGURED', 'Image uploads are not configured yet'),
   tenantRequired: () =>

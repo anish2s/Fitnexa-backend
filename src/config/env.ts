@@ -88,6 +88,20 @@ export const envSchema = z
     MAIL_FROM: z.string().trim().min(3).default('Gym App <no-reply@localhost>'),
     RESEND_API_KEY: z.string().trim().optional(),
 
+    // --- Online payments (Razorpay, each gym's own account) ---
+    /**
+     * 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts gyms' Razorpay secrets at rest.
+     * Without it, gyms can't connect Razorpay (desk payments work regardless). Rotating it makes
+     * stored secrets unreadable: gyms must re-enter their keys.
+     */
+    PAYMENTS_ENCRYPTION_KEY: z
+      .string()
+      .trim()
+      .refine((v) => Buffer.from(v, 'base64').length === 32, 'Must be 32 bytes, base64-encoded')
+      .optional(),
+    /** Live keys move real money. Off until the owner explicitly approves going live. */
+    RAZORPAY_ALLOW_LIVE: bool,
+
     // --- Image uploads (Cloudinary). All three or none; without them uploads answer 503. ---
     CLOUDINARY_CLOUD_NAME: z
       .string()

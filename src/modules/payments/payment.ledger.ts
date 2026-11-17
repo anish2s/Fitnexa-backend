@@ -164,3 +164,33 @@ export async function insertRefund(
   );
   return refundId;
 }
+
+/**
+ * Undoes a pending refund that the gateway rejected (or reported failed): marks it failed and puts
+ * the amount back on the payment and the membership. Safe to call twice.
+ */
+export async function revertRefund(
+  session: ClientSession,
+  paymentId: Types.ObjectId,
+  refundId: Types.ObjectId,
+) {
+  const p = await Payment.findOne({
+    _id: paymentId,
+    refunds: { $elemMatch: { _id: refundId, status: { $ne: 'failed' } } },
+  })
+    .session(session)
+    .lean();
+  const r = p?.refunds.find((x) => String(x._id) === String(refundId));
+  if (!p || !r) return false;
+  await Payment.updateOne(
+    { _id: paymentId, 'refunds._id': refundId, 'refunds.status': { $ne: 'failed' } },
+    { $set: { 'refunds.$.status': 'failed' }, $inc: { refundedPaise: -r.amountPaise } },
+    { session },
+  );
+  await Membership.updateOne(
+    { _id: p.membershipId },
+    { $inc: { paidPaise: r.amountPaise } },
+    { session },
+  );
+  return true;
+}

@@ -37,6 +37,8 @@ export const PERMISSIONS = [
   // member self-service (PWA)
   'self:read',
   'self:update',
+  /** Pay one's own membership online (member app). */
+  'self:pay',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -60,7 +62,7 @@ const STAFF: Permission[] = [
   'dashboard:read',
 ];
 
-const MEMBER: Permission[] = ['self:read', 'self:update'];
+const MEMBER: Permission[] = ['self:read', 'self:update', 'self:pay'];
 
 export const ROLE_PERMISSIONS: Record<TenantRole, readonly Permission[]> = {
   owner: OWNER,

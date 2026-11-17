@@ -138,6 +138,16 @@ export const notWhileImpersonating: RequestHandler = (req, _res, next) => {
   next();
 };
 
+/** Requires a gym user holding AT LEAST ONE of the given permissions (e.g. desk OR the member). */
+export function authorizeAny(...anyOf: Permission[]): RequestHandler {
+  return (req, _res, next) => {
+    const a = req.auth;
+    if (!a) throw Errors.unauthorized();
+    if (a.kind !== 'tenant' || !anyOf.some((p) => a.permissions.has(p))) throw Errors.forbidden();
+    next();
+  };
+}
+
 /** Requires a gym user holding ALL the given permissions. */
 export function authorize(...required: Permission[]): RequestHandler {
   return (req, _res, next) => {

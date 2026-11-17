@@ -418,7 +418,7 @@ describeWithDb('authentication (real MongoDB)', () => {
       expect(signedIn.status).toBe(200);
       expect(signedIn.body.data.user).toMatchObject({
         role: 'member',
-        permissions: ['self:read', 'self:update'],
+        permissions: ['self:read', 'self:update', 'self:pay'],
       });
       expect(refreshCookieOf(signedIn)).toBeTruthy();
     });

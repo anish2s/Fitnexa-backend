@@ -1,6 +1,6 @@
 import mongoose, { type Model } from 'mongoose';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import '../../src/db/models.js';
+import { Membership, PaymentOrder, WebhookEvent } from '../../src/db/models.js';
 import { runAsPlatform, runInTenant } from '../../src/tenancy/context.js';
 import { connectTestDb, describeWithDb, dropAndDisconnect } from '../helpers/db.js';
 import { FZ, PH, gymId, intApp, resetDemo } from '../helpers/int.js';
@@ -17,9 +17,11 @@ const TENANT_SCOPED = [
   'Member',
   'Membership',
   'Payment',
+  'PaymentOrder',
   'Plan',
   'Session',
   'User',
+  'WebhookEvent',
 ];
 const PLATFORM_ONLY = ['PlatformAdmin', 'PlatformAuditLog', 'PlatformSession', 'Tenant'];
 
@@ -49,6 +51,20 @@ describeWithDb('cross-tenant isolation for every model (real MongoDB)', () => {
         phone: '9876500000',
         email: 'iso@member.demo',
         consent: true,
+      });
+    }
+    // Razorpay orders and webhook events have no seed data; add one per gym directly.
+    for (const gym of [ph, fz]) {
+      await runInTenant(gym, async () => {
+        const m = await Membership.findOne().lean();
+        await PaymentOrder.create({
+          membershipId: m!._id,
+          memberId: m!.memberId,
+          amountPaise: 1000,
+          razorpayOrderId: `order_iso${gym.slice(-6)}`,
+          createdVia: 'desk',
+        });
+        await WebhookEvent.create({ provider: 'razorpay', eventId: `evt_iso${gym.slice(-6)}` });
       });
     }
   });
@@ -104,10 +120,7 @@ describeWithDb('cross-tenant isolation for every model (real MongoDB)', () => {
         expect(agg, `${name} aggregate`).toEqual([]);
         // The audit log refuses all updates/deletes; for the rest, they must match nothing.
         if (name !== 'AuditLog') {
-          const upd = await model.updateMany(
-            { _id: { $in: phIds } },
-            { $set: { updatedAt: new Date() } },
-          );
+          const upd = await model.updateMany({ _id: { $in: phIds } }, { $inc: { __v: 0 } });
           expect(upd.matchedCount, `${name} update`).toBe(0);
           const del = await model.deleteMany({ _id: { $in: phIds } });
           expect(del.deletedCount, `${name} delete`).toBe(0);
@@ -118,6 +131,13 @@ describeWithDb('cross-tenant isolation for every model (real MongoDB)', () => {
         model.countDocuments({ _id: { $in: phIds } }),
       );
       expect(still, `${name} rows survived`).toBe(phIds.length);
+      // Control: the same update DOES match these rows when allowed, so "matched 0" above is real.
+      if (name !== 'AuditLog') {
+        const control = await runAsPlatform('isolation test', () =>
+          model.updateMany({ _id: { $in: phIds } }, { $inc: { __v: 0 } }),
+        );
+        expect(control.matchedCount, `${name} control`).toBe(phIds.length);
+      }
     }
   });
 

@@ -13,6 +13,8 @@ declare module 'express-serve-static-core' {
   interface Request {
     /** Parsed, validated and stripped input. Handlers read from here, never from req.body directly. */
     valid: { body: unknown; query: unknown; params: unknown };
+    /** Exact request bytes, kept only for /api/v1/webhooks/* (signature checks). */
+    rawBody?: Buffer;
   }
 }
 

@@ -56,6 +56,9 @@ Status legend: ✅ implemented & tested · 🟡 implemented, DB tests not yet ru
 | subscription | `{ status, planCode, priceMonthlyPaise, currentPeriodEnd }` | platform billing |
 | suspendedAt, suspendedReason | | |
 
+`razorpay { keyId, keySecretEnc, webhookSecretEnc, updatedAt }`: the gym's own Razorpay account;
+secrets are AES-256-GCM ciphertext (`select: false`).
+
 Indexes: `{ slug: 1 } unique`, `{ customDomain: 1 } unique partial`, `{ status: 1 }`.
 
 ### platformAdmins ✅ (not tenant-scoped)
@@ -113,6 +116,12 @@ disabled in the same transaction as the member.
 ### counters ✅ (tenant-scoped)
 `src/modules/counters/counter.model.ts`. `key`, `seq`; `{ tenantId, key } unique`. Atomic `$inc` with
 upsert. Keys: `memberCode`, `receipt:<financial year>` (e.g. `receipt:2026-27`), `refund:<financial year>`.
+
+### paymentOrders ✅ · webhookEvents ✅ (tenant-scoped)
+`src/modules/payments/payment-order.model.ts`. **paymentOrders**: `membershipId`, `memberId`,
+`amountPaise`, `razorpayOrderId` (`{ tenantId, razorpayOrderId } unique`), `status` (`created/paid`),
+`razorpayPaymentId`, `createdBy`, `createdVia` (`desk/member`). **webhookEvents**: `provider`, `eventId`
+(`{ tenantId, provider, eventId } unique`), `event`; TTL 30 days on `createdAt`.
 
 ### plans ✅ (tenant-scoped)
 `src/modules/plans/plan.model.ts`. `name`, `nameKey` (lower-cased), `description`, `duration` (`monthly/quarterly/half_yearly/yearly`), `months` (1/3/6/12, for sorting),

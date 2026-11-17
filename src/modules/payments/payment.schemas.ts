@@ -50,3 +50,38 @@ export const refundBody = z.object({
   method: z.enum(['cash', 'upi', 'bank_transfer']).optional(),
 });
 export type RefundInput = z.infer<typeof refundBody>;
+
+export const gatewayKeysBody = z.object({
+  keyId: z
+    .string()
+    .trim()
+    .regex(/^rzp_(test|live)_[A-Za-z0-9]{8,32}$/, 'Paste the Key Id from Razorpay (rzp_test_…)'),
+  keySecret: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9]{16,64}$/, 'Paste the Key Secret from Razorpay'),
+  /** The secret you typed when creating the webhook in the Razorpay dashboard. */
+  webhookSecret: z.string().trim().min(8).max(64),
+});
+export type GatewayKeysInput = z.infer<typeof gatewayKeysBody>;
+
+export const orderBody = z.object({
+  /** Defaults to the whole balance due. Razorpay's minimum is ₹1. */
+  amountPaise: z.number().int().min(100).max(1_00_00_000).optional(),
+});
+
+export const verifyBody = z.object({
+  orderId: z
+    .string()
+    .trim()
+    .regex(/^order_[A-Za-z0-9]{6,40}$/),
+  paymentId: z
+    .string()
+    .trim()
+    .regex(/^pay_[A-Za-z0-9]{6,40}$/),
+  signature: z
+    .string()
+    .trim()
+    .regex(/^[a-f0-9]{64}$/),
+});
+export type VerifyInput = z.infer<typeof verifyBody>;

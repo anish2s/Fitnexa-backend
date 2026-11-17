@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–5 complete and verified against a real MongoDB 8.0 (live email and image upload blocked on credentials). Milestone 6 in progress.**
+**Phase 1 — Backend. Milestones 1–6 complete and verified against a real MongoDB 8.0 (live email, image upload and Razorpay round trip need credentials). Milestone 7 next.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -68,13 +68,14 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Plans CRUD + archive/restore (monthly/quarterly/half-yearly/yearly, integer-paise price, GST inclusive/exclusive/none at 0/5/12/18/28%, GST only with a GSTIN, unique live names); 8 integration + 6 money unit tests
 - [x] Sell, renew (from expiry or today), cancel, history (staff + member app); derived status; gym-wide status lists; expiring-soon excluding renewed/archived; no overlaps (race-safe); price snapshot; 13 integration tests
 
-### M6 — Payments & receipts
+### M6 — Payments & receipts ✅ (live Razorpay round trip pending a test account)
 - [x] Cash / UPI / card / bank transfer recording; required Idempotency-Key (replay, conflict on reuse, race-safe); sell + collect in one transaction
 - [x] Receipt numbering per gym per Indian FY, gap-free (counter in the payment transaction)
 - [x] PDF receipt (staff + member's own), CGST/SGST split; content verified by decoding the PDF text in tests
 - [x] Partial payments / balance due / payment status / dues list; atomic no-overpay guard (5 parallel → 2 accepted)
 - [x] Desk refunds: partial/full, numbered per FY, idempotent, atomic cap, balance in the same transaction, `payments:refund` only
-- [ ] Razorpay order + verification + webhooks (test keys), gateway refunds
+- [x] Razorpay (each gym's own account, test keys only unless allowed): encrypted keys, orders (desk + member app), signature verification, signed webhooks with de-dup, gateway refunds with reserve/revert; 22 tests against a fake gateway
+- [~] Live Razorpay round trip with real test keys: **needs a Razorpay test account**
 - [x] Transactions for payment + membership + counter
 
 ### M7 — Attendance
@@ -130,3 +131,6 @@ depend on the backend.
   cross-gym token refusal, email link, gym creation + invite, impersonation, suspension, audit log,
   staff, members, CSV import, uploads-not-configured, plans in months, sell/overlap/renew/expiring,
   isolation, no secrets in logs). Only open M1–M5 items: live Resend and Cloudinary (credentials).
+- **2026-11-17** — M6 in four commits: desk payments (idempotent, balances, gap-free receipts per FY,
+  sell + collect), PDF receipts, refunds, Razorpay (per-gym encrypted keys, orders, verify, signed
+  webhooks, gateway refunds). Test-mode only; nothing talks to Razorpay in tests. 313 tests passing.

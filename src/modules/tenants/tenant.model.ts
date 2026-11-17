@@ -83,6 +83,16 @@ const tenantSchema = new Schema(
     },
     suspendedAt: { type: Date },
     suspendedReason: { type: String, maxlength: 500 },
+    /**
+     * The gym's own Razorpay account (money lands with the gym, not the platform). Secrets are
+     * AES-256-GCM ciphertext (lib/secret-box.ts) and never selected unless asked for.
+     */
+    razorpay: {
+      keyId: { type: String, maxlength: 64 },
+      keySecretEnc: { type: String, select: false, maxlength: 512 },
+      webhookSecretEnc: { type: String, select: false, maxlength: 512 },
+      updatedAt: { type: Date },
+    },
   },
   { timestamps: true },
 );

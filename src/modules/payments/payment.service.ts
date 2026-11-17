@@ -21,10 +21,11 @@ import {
   localDateRange,
 } from './payment.ledger.js';
 import { Payment } from './payment.model.js';
+import type { GatewayService } from './gateway.service.js';
 import { assertSameRequest, toPaymentView, type LeanPayment } from './payment.view.js';
 import type { OfflinePaymentInput, PaymentListQuery, RefundInput } from './payment.schemas.js';
 
-export function createPaymentService(deps: { audit: AuditService }) {
+export function createPaymentService(deps: { audit: AuditService; gateway?: GatewayService }) {
   const { audit } = deps;
 
   async function withMembership(p: LeanPayment) {
@@ -278,9 +279,6 @@ export function createPaymentService(deps: { audit: AuditService }) {
     if (await Payment.exists({ _id: { $ne: p._id }, 'refunds.idempotencyKey': key })) {
       throw Errors.conflict('This Idempotency-Key was already used for a different refund');
     }
-    if (p.method === 'razorpay') {
-      throw Errors.conflict('Online payments are refunded through the payment gateway');
-    }
     const left = p.amountPaise - (p.refundedPaise ?? 0);
     if (input.amountPaise > left) {
       throw Errors.validation([
@@ -291,9 +289,21 @@ export function createPaymentService(deps: { audit: AuditService }) {
       ]);
     }
 
+    let refundId: Types.ObjectId | null = null;
+    if (p.method === 'razorpay') {
+      // Online payments go back through the gateway (reserve → Razorpay → settle).
+      if (!deps.gateway) throw Errors.gatewayNotConfigured();
+      try {
+        refundId = await deps.gateway.refundOnline(p, input, key, ctx);
+      } catch (err) {
+        if (isDuplicateKey(err, 'refunds.idempotencyKey')) return refund(id, input, key, ctx);
+        throw err;
+      }
+      return finishRefund(p, refundId, ctx);
+    }
+
     const settings = await gymPaymentSettings();
     const session = await mongoose.startSession();
-    let refundId: Types.ObjectId | null = null;
     try {
       await session.withTransaction(async () => {
         refundId = await insertRefund(
@@ -325,17 +335,22 @@ export function createPaymentService(deps: { audit: AuditService }) {
       await session.endSession();
     }
 
+    return finishRefund(p, refundId!, ctx);
+  }
+
+  async function finishRefund(p: LeanPayment, refundId: Types.ObjectId, ctx: AuditContext) {
     const after = await Payment.findById(p._id).lean<LeanPayment>();
     const r = after!.refunds!.find((x) => String(x._id) === String(refundId))!;
     await audit.record(ctx, {
       action: 'payment.refund',
-      target: { type: 'payment', id },
+      target: { type: 'payment', id: String(p._id) },
       metadata: {
         receiptNumber: p.receiptNumber,
         refundNumber: r.refundNumber,
         amountPaise: r.amountPaise,
         method: r.method,
         reason: r.reason,
+        status: r.status,
       },
     });
     return { payment: await withMembership(after!), replayed: false };

@@ -27,6 +27,10 @@ Every response carries `X-Request-Id`.
 | 409 | `CONFLICT`, `DUPLICATE` | duplicate values are never echoed back |
 | 413 | `PAYLOAD_TOO_LARGE` | body > 100 kb |
 | 503 | `UPLOADS_NOT_CONFIGURED` | Cloudinary credentials not set |
+| 503 | `PAYMENT_GATEWAY_NOT_CONFIGURED` | server has no `PAYMENTS_ENCRYPTION_KEY` |
+| 409 | `PAYMENT_GATEWAY_NOT_CONNECTED` | this gym hasn't connected Razorpay |
+| 502 | `PAYMENT_GATEWAY_ERROR` | Razorpay refused or couldn't be reached |
+| 400 | `INVALID_SIGNATURE` | checkout or webhook signature didn't verify |
 | 422 | `VALIDATION_ERROR` | `details: [{ path, message }]` |
 | 422 | `IMPORT_INVALID` | CSV import had bad rows; `details` = row report; nothing written |
 | 429 | `RATE_LIMITED`, `LOGIN_LOCKED` | |
@@ -160,7 +164,8 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`, `member.create`,
 `member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
 `member.photo_remove`, `member.import`, `plan.create`, `plan.update`, `plan.archive`, `plan.restore`, `membership.create`, `membership.renew`,
-`membership.cancel`, `payment.record`, `payment.refund`. Member names, birth dates,
+`membership.cancel`, `payment.record`, `payment.refund`, `payment.refund_failed`,
+`gym.payment_gateway_update`, `gym.payment_gateway_remove`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -330,6 +335,36 @@ reference, receivedAt, receivedBy, notes, gateway, createdAt }`.
   and period, price, discount, taxable value, CGST + SGST at half the rate each (odd paisa to SGST,
   only when the gym charges GST), total, this payment and mode/reference, paid to date, balance due.
   Amounts print as `Rs. 1,500.00` (standard PDF fonts have no ₹ glyph).
+
+## Online payments — Razorpay (gym host)
+
+Each gym connects **its own** Razorpay account; money lands with the gym. Test keys only unless the
+server sets `RAZORPAY_ALLOW_LIVE=true`. Desk payments work whether or not Razorpay is connected.
+
+| Method & path | Who | Body | Result |
+|---|---|---|---|
+| `GET /gym/payment-gateway` | owner (`gym:update`) | — | `{ available, razorpay{ connected, keyId, mode: test|live, liveAllowed, webhookUrl, updatedAt } }` |
+| `PUT /gym/payment-gateway/razorpay` | owner, not while impersonated | `{ keyId: rzp_test_…, keySecret, webhookSecret }` | settings. Secrets are stored encrypted, never returned. |
+| `DELETE /gym/payment-gateway/razorpay` | owner, not while impersonated | — | settings (disconnected) |
+| `POST /memberships/:id/razorpay-order` | `payments:record` | `{ amountPaise? }` (default: balance; min ₹1) | `201` Checkout params |
+| `POST /members/me/memberships/:id/razorpay-order` | member (`self:pay`), own membership only | `{ amountPaise? }` | `201` Checkout params |
+| `POST /payments/razorpay/verify` | `payments:record` or member (own orders only) | `{ orderId, paymentId, signature }` from Checkout | `201` payment (`200` if already recorded) |
+| `POST /webhooks/razorpay` | Razorpay (signed) | raw Razorpay event | `200 { status: captured|refund_processed|refund_failed|ignored|duplicate }` |
+
+Checkout params: `{ keyId, orderId, amountPaise, currency: "INR", name, description, prefill{ name, email, contact } }`
+→ pass to Razorpay Checkout (`key`, `order_id`, `amount`, …). On success send its
+`razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature` to `/payments/razorpay/verify`.
+
+- **Webhook setup** (Razorpay dashboard → Webhooks): URL from `GET /gym/payment-gateway`
+  (`https://<gym>.yourapp.in/api/v1/webhooks/razorpay`), the same secret as `webhookSecret`, events
+  `payment.captured`, `order.paid`, `refund.processed`, `refund.failed`. The webhook records payments
+  even if the member closes the browser before `verify`; whichever arrives first wins, the other is a
+  no-op.
+- Online payments are recorded even if they exceed the balance (money was taken); the membership
+  then shows `paymentStatus: overpaid` and the owner can refund the excess.
+- **Refunds** of online payments (`POST /payments/:id/refunds`) go through Razorpay to the original
+  method: recorded first as `pending`, then `processed` (or reverted as `failed` if Razorpay refuses →
+  `502 PAYMENT_GATEWAY_ERROR`, or later via the `refund.failed` webhook).
 
 ## Image uploads — `/api/v1/uploads` (gym host)
 

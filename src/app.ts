@@ -20,6 +20,9 @@ import { createPlatformService } from './modules/platform/platform.service.js';
 import { memberRouter } from './modules/members/member.routes.js';
 import { membershipRouters } from './modules/memberships/membership.routes.js';
 import { paymentRouters } from './modules/payments/payment.routes.js';
+import { gatewayRouters } from './modules/payments/gateway.routes.js';
+import { createGatewayService } from './modules/payments/gateway.service.js';
+import { httpRazorpayClient, type RazorpayClient } from './modules/payments/razorpay.client.js';
 import { planRouter } from './modules/plans/plan.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
 import { uploadRouter } from './modules/uploads/upload.routes.js';
@@ -33,6 +36,8 @@ export interface AppDeps {
   tenantLookup: TenantLookup;
   isDbReady: () => boolean;
   mailer: Mailer;
+  /** Razorpay HTTP client; tests inject a fake. */
+  razorpay?: RazorpayClient;
   /** Defaults to Cloudinary from env; `null` = uploads not configured. Tests inject a fake. */
   images?: ImageStore | null;
 }
@@ -89,7 +94,16 @@ export function createApp(deps: AppDeps) {
         }),
     }),
   );
-  app.use(express.json({ limit: '100kb' }));
+  app.use(
+    express.json({
+      limit: '100kb',
+      // Webhook signatures are over the exact bytes received, not the re-serialised JSON.
+      verify: (req, _res, buf) => {
+        const r = req as express.Request;
+        if (r.originalUrl?.startsWith('/api/v1/webhooks/')) r.rawBody = Buffer.from(buf);
+      },
+    }),
+  );
 
   app.use(
     resolveTenant({
@@ -117,13 +131,25 @@ export function createApp(deps: AppDeps) {
   v1.use('/audit-logs', auditRouter({ jwt, audit }));
   v1.use('/staff', staffRouter({ jwt, auth, audit }));
   const ms = membershipRouters({ jwt, audit });
-  const pay = paymentRouters({ jwt, audit });
+  const gateway = createGatewayService({
+    env,
+    audit,
+    logger,
+    razorpay: deps.razorpay ?? httpRazorpayClient(),
+  });
+  const gw = gatewayRouters({ jwt, gateway });
+  const pay = paymentRouters({ jwt, audit, gateway });
   v1.use('/members', ms.perMember);
   v1.use('/members', pay.perMember);
+  v1.use('/members', gw.memberOrders);
   v1.use('/members', memberRouter({ jwt, audit, images }));
   v1.use('/memberships', pay.perMembership);
+  v1.use('/memberships', gw.deskOrders);
   v1.use('/memberships', ms.memberships);
+  v1.use('/payments', gw.verify);
   v1.use('/payments', pay.payments);
+  v1.use('/gym/payment-gateway', gw.settings);
+  v1.use('/webhooks', gw.webhooks);
   v1.use('/uploads', uploadRouter({ jwt, images }));
   v1.use('/plans', planRouter({ jwt, audit }));
   v1.use('/platform', platformRouter({ jwt, platform, audit }));

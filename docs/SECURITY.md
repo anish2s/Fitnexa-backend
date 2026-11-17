@@ -120,12 +120,23 @@ Notes for the frontend (Phase 2/3):
 | 10 s timeout; no automatic retry (a retry could double-send a one-time link) | ✅ |
 | Real delivery through Resend with a verified domain | 🟡 blocked: needs API key + verified domain |
 
-## Payments ⬜ M6
-- Razorpay webhooks: HMAC-SHA256 over the **raw** body, timing-safe compare, event id de-duplicated.
-- Client "payment success" callbacks never mark anything paid without server-side signature verification.
-- `Idempotency-Key` on payment creation; unique indexes on gateway ids.
-- Payment + membership + receipt counter written in one transaction.
-- Gym Razorpay secrets encrypted at rest (AES-256-GCM, key from env).
+## Payments ✅ M6
+
+| Control | Status |
+|---|---|
+| Razorpay webhooks: HMAC-SHA256 over the **raw** body bytes (captured before JSON parsing), timing-safe compare, per-gym secret, event id de-duplicated (30-day TTL) | ✅ |
+| Checkout callbacks never mark anything paid without server-side signature verification (HMAC of `order_id|payment_id` with the gym's key secret); forged/swapped signatures record nothing | ✅ |
+| Amount of an online payment comes from our order (or the signed webhook), never from the client | ✅ |
+| Each gateway payment id recorded once (unique index); verify + webhook racing for the same payment → one row | ✅ |
+| `Idempotency-Key` required on every money-recording request; unique per gym | ✅ |
+| Payment + membership balance + receipt counter in one transaction; receipts and refund numbers gap-free per FY | ✅ |
+| Gym Razorpay secrets: AES-256-GCM, master key from env, gym id as AAD (a secret copied to another gym won't open), `select: false`, never returned or logged | ✅ |
+| Live keys refused unless `RAZORPAY_ALLOW_LIVE=true` (owner approval, project Rule 7) | ✅ |
+| Payout keys: owner only, not while a super admin is impersonating | ✅ |
+| Gateway refunds reserved in our books before calling Razorpay; reverted on refusal or `refund.failed` (idempotent) | ✅ |
+| Members can only create orders for, and complete, their own memberships (IDOR tests) | ✅ |
+| Tests can't reach Razorpay: the test app's default client throws; a fake is injected where needed | ✅ |
+| Live Razorpay round trip (test keys) | 🟡 needs a Razorpay test account |
 
 ## Attendance QR ⬜ M7
 - Member pass = `HMAC(tenantId|memberId|window)` with 30–60 s rotating windows; server accepts current ±1
@@ -161,3 +172,9 @@ Notes for the frontend (Phase 2/3):
 11. Receipts are "payment receipts". Whether they also meet GST **tax invoice** requirements (fields,
     SAC code, numbering rules, B2B details) must be confirmed by the gym's CA before relying on them
     for GST filing. Changing the layout is cheap; tell us what the CA asks for.
+12. Rotating `PAYMENTS_ENCRYPTION_KEY` makes stored gym secrets unreadable (gyms re-enter keys; the
+    API treats undecryptable secrets as "not connected" and logs an error). A key-rotation script can
+    be added if it becomes routine.
+13. Razorpay orders are created for the balance at that moment. If the desk collects cash before the
+    member completes online payment, both are recorded and the membership shows `overpaid`; the owner
+    refunds the excess. Auto-refund was not built (money decisions stay with the owner).
