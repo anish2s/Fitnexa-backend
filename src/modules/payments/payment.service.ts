@@ -16,12 +16,13 @@ import { renderReceiptPdf, type ReceiptData } from './receipt.pdf.js';
 import {
   gymPaymentSettings,
   insertPayment,
+  insertRefund,
   isDuplicateKey,
   localDateRange,
 } from './payment.ledger.js';
 import { Payment } from './payment.model.js';
 import { assertSameRequest, toPaymentView, type LeanPayment } from './payment.view.js';
-import type { OfflinePaymentInput, PaymentListQuery } from './payment.schemas.js';
+import type { OfflinePaymentInput, PaymentListQuery, RefundInput } from './payment.schemas.js';
 
 export function createPaymentService(deps: { audit: AuditService }) {
   const { audit } = deps;
@@ -259,7 +260,88 @@ export function createPaymentService(deps: { audit: AuditService }) {
     return { receiptNumber: p.receiptNumber, pdf: await renderReceiptPdf(await receiptData(p)) };
   }
 
-  return { record, get, list, forMember, selfPayments, receipt, selfReceipt };
+  /**
+   * Refunds part or all of a payment. Desk payments: records money handed back. Online payments
+   * go back through the gateway (M6 step 4); until a gateway is configured they are refused.
+   */
+  async function refund(id: string, input: RefundInput, key: string, ctx: AuditContext) {
+    const p = await Payment.findById(id).lean<LeanPayment>();
+    if (!p) throw Errors.notFound('Payment');
+    const prior = p.refunds?.find((r) => r.idempotencyKey === key);
+    if (prior) {
+      if (prior.amountPaise !== input.amountPaise) {
+        throw Errors.conflict('This Idempotency-Key was already used for a different refund');
+      }
+      return { payment: await withMembership(p), replayed: true };
+    }
+    // A key used on ANOTHER payment's refund is reuse, not a retry.
+    if (await Payment.exists({ _id: { $ne: p._id }, 'refunds.idempotencyKey': key })) {
+      throw Errors.conflict('This Idempotency-Key was already used for a different refund');
+    }
+    if (p.method === 'razorpay') {
+      throw Errors.conflict('Online payments are refunded through the payment gateway');
+    }
+    const left = p.amountPaise - (p.refundedPaise ?? 0);
+    if (input.amountPaise > left) {
+      throw Errors.validation([
+        {
+          path: 'amountPaise',
+          message: `Only ${left} paise of this payment can still be refunded`,
+        },
+      ]);
+    }
+
+    const settings = await gymPaymentSettings();
+    const session = await mongoose.startSession();
+    let refundId: Types.ObjectId | null = null;
+    try {
+      await session.withTransaction(async () => {
+        refundId = await insertRefund(
+          session,
+          {
+            paymentId: p._id,
+            membershipId: p.membershipId,
+            amountPaise: input.amountPaise,
+            method: input.method ?? 'cash',
+            reason: input.reason,
+            status: 'processed',
+            idempotencyKey: key,
+            refundedBy: ctx.actor.id,
+          },
+          settings,
+        );
+        // Nothing matched: a parallel refund used up the amount, or the same key won the race.
+        if (!refundId)
+          throw Errors.validation([
+            { path: 'amountPaise', message: 'Refund is more than what is left on this payment' },
+          ]);
+      });
+    } catch (err) {
+      if (isDuplicateKey(err, 'refunds.idempotencyKey')) return refund(id, input, key, ctx);
+      const again = await Payment.findOne({ _id: p._id, 'refunds.idempotencyKey': key }).lean();
+      if (again) return refund(id, input, key, ctx);
+      throw err;
+    } finally {
+      await session.endSession();
+    }
+
+    const after = await Payment.findById(p._id).lean<LeanPayment>();
+    const r = after!.refunds!.find((x) => String(x._id) === String(refundId))!;
+    await audit.record(ctx, {
+      action: 'payment.refund',
+      target: { type: 'payment', id },
+      metadata: {
+        receiptNumber: p.receiptNumber,
+        refundNumber: r.refundNumber,
+        amountPaise: r.amountPaise,
+        method: r.method,
+        reason: r.reason,
+      },
+    });
+    return { payment: await withMembership(after!), replayed: false };
+  }
+
+  return { record, get, list, forMember, selfPayments, receipt, selfReceipt, refund };
 }
 
 export type PaymentService = ReturnType<typeof createPaymentService>;

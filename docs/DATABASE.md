@@ -112,7 +112,7 @@ disabled in the same transaction as the member.
 
 ### counters ✅ (tenant-scoped)
 `src/modules/counters/counter.model.ts`. `key`, `seq`; `{ tenantId, key } unique`. Atomic `$inc` with
-upsert. Keys: `memberCode`, `receipt:<financial year>` (e.g. `receipt:2026-27`).
+upsert. Keys: `memberCode`, `receipt:<financial year>` (e.g. `receipt:2026-27`), `refund:<financial year>`.
 
 ### plans ✅ (tenant-scoped)
 `src/modules/plans/plan.model.ts`. `name`, `nameKey` (lower-cased), `description`, `duration` (`monthly/quarterly/half_yearly/yearly`), `months` (1/3/6/12, for sorting),
@@ -133,7 +133,9 @@ for one member serialise (overlap check can't be raced).
 ### payments ✅ (tenant-scoped)
 `src/modules/payments/payment.model.ts`. `memberId`, `membershipId`, `amountPaise`, `method`
 (`cash/upi/card/bank_transfer/razorpay`), `reference`, `receiptNumber`, `financialYear`, `receivedAt`,
-`receivedBy`, `notes`, `idempotencyKey`, `gateway { provider, orderId, paymentId }`, `refundedPaise`.
+`receivedBy`, `notes`, `idempotencyKey`, `gateway { provider, orderId, paymentId }`, `refundedPaise`,
+`refunds[] { refundNumber, amountPaise, method, reason, status, refundedAt, refundedBy, idempotencyKey, gatewayRefundId }`
+(+ index `{ tenantId, refunds.idempotencyKey } unique partial`).
 Indexes: `{ tenantId, receiptNumber } unique`, `{ tenantId, idempotencyKey } unique partial`,
 `{ tenantId, gateway.paymentId } unique partial`, `{ tenantId, membershipId, receivedAt }`,
 `{ tenantId, memberId, receivedAt: -1 }`, `{ tenantId, receivedAt: -1 }`.

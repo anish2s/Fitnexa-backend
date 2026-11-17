@@ -73,7 +73,8 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Receipt numbering per gym per Indian FY, gap-free (counter in the payment transaction)
 - [x] PDF receipt (staff + member's own), CGST/SGST split; content verified by decoding the PDF text in tests
 - [x] Partial payments / balance due / payment status / dues list; atomic no-overpay guard (5 parallel → 2 accepted)
-- [ ] Razorpay order + verification + webhooks (test keys), refunds
+- [x] Desk refunds: partial/full, numbered per FY, idempotent, atomic cap, balance in the same transaction, `payments:refund` only
+- [ ] Razorpay order + verification + webhooks (test keys), gateway refunds
 - [x] Transactions for payment + membership + counter
 
 ### M7 — Attendance

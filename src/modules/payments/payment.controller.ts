@@ -7,6 +7,7 @@ import {
   idempotencyKey,
   type OfflinePaymentInput,
   type PaymentListQuery,
+  type RefundInput,
 } from './payment.schemas.js';
 import type { PaymentService } from './payment.service.js';
 
@@ -60,6 +61,17 @@ export function createPaymentController(payments: PaymentService) {
     async forMember(req: Request, res: Response) {
       noStore(res);
       ok(res, await payments.forMember(idOf(req)));
+    },
+    async refund(req: Request, res: Response) {
+      const key = idempotencyKeyOf(req);
+      const { payment, replayed } = await payments.refund(
+        idOf(req),
+        req.valid.body as RefundInput,
+        key,
+        auditContextFrom(req),
+      );
+      if (replayed) res.set('Idempotent-Replayed', 'true');
+      return replayed ? ok(res, payment) : created(res, payment);
     },
     async receipt(req: Request, res: Response) {
       sendPdf(res, await payments.receipt(idOf(req)));

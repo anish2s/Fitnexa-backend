@@ -24,6 +24,13 @@ export function paymentRouters(deps: { jwt: JwtConfig; audit: AuditService }) {
   const payments = Router();
   payments.get('/', auth, read, validate({ query: s.paymentListQuery }), c.list);
   payments.get('/:id', auth, read, validate({ params: s.paymentIdParams }), c.get);
+  payments.post(
+    '/:id/refunds',
+    auth,
+    authorize('payments:refund'),
+    validate({ params: s.paymentIdParams, body: s.refundBody }),
+    c.refund,
+  );
   payments.get('/:id/receipt', auth, read, validate({ params: s.paymentIdParams }), c.receipt);
 
   const perMembership = Router();

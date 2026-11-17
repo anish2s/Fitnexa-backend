@@ -42,3 +42,11 @@ export type PaymentListQuery = z.infer<typeof paymentListQuery>;
 export const idempotencyKey = z
   .string({ message: 'Send an Idempotency-Key header (e.g. a UUID) with every payment' })
   .regex(/^[A-Za-z0-9_-]{8,100}$/, 'Idempotency-Key must be 8-100 letters, digits, _ or -');
+
+export const refundBody = z.object({
+  amountPaise: z.number().int().min(1).max(1_00_00_000),
+  reason: z.string().trim().min(3).max(500),
+  /** Desk refunds: how the money was handed back. Ignored for online payments (gateway refund). */
+  method: z.enum(['cash', 'upi', 'bank_transfer']).optional(),
+});
+export type RefundInput = z.infer<typeof refundBody>;

@@ -16,6 +16,18 @@ export type LeanPayment = {
   idempotencyKey?: string | null;
   gateway?: { provider?: string; orderId?: string; paymentId?: string } | null;
   refundedPaise?: number;
+  refunds?: {
+    _id: Types.ObjectId;
+    refundNumber: string;
+    amountPaise: number;
+    method: string;
+    reason: string;
+    status: string;
+    refundedAt: Date;
+    refundedBy?: Types.ObjectId | null;
+    idempotencyKey?: string | null;
+    gatewayRefundId?: string | null;
+  }[];
   createdAt?: Date;
 };
 
@@ -28,6 +40,17 @@ export function toPaymentView(p: LeanPayment, opts: { forMember?: boolean } = {}
     membershipId: String(p.membershipId),
     amountPaise: p.amountPaise,
     refundedPaise: p.refundedPaise ?? 0,
+    refunds: (p.refunds ?? []).map((r) => ({
+      id: String(r._id),
+      refundNumber: r.refundNumber,
+      amountPaise: r.amountPaise,
+      method: r.method,
+      status: r.status,
+      refundedAt: r.refundedAt,
+      ...(opts.forMember
+        ? {}
+        : { reason: r.reason, refundedBy: r.refundedBy ? String(r.refundedBy) : null }),
+    })),
     method: p.method,
     reference: p.reference ?? null,
     receivedAt: p.receivedAt,

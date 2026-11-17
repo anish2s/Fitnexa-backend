@@ -104,3 +104,63 @@ export function isDuplicateKey(err: unknown, field: string): boolean {
   const e = err as { code?: number; keyPattern?: Record<string, unknown> };
   return e?.code === 11000 && Boolean(e.keyPattern && field in e.keyPattern);
 }
+
+export interface NewRefund {
+  paymentId: Types.ObjectId;
+  membershipId: Types.ObjectId;
+  amountPaise: number;
+  method: 'cash' | 'upi' | 'bank_transfer' | 'gateway';
+  reason: string;
+  status: 'processed' | 'pending';
+  idempotencyKey: string;
+  refundedBy?: string;
+  gatewayRefundId?: string;
+}
+
+/**
+ * Records a refund inside a transaction: the refund entry (numbered per gym per FY), the payment's
+ * refundedPaise and the membership's paidPaise move together. The filter guarantees the refund
+ * never exceeds what is left on the payment and that the same key can't be applied twice.
+ */
+export async function insertRefund(
+  session: ClientSession,
+  r: NewRefund,
+  settings: GymPaymentSettings,
+) {
+  const now = new Date();
+  const fy = financialYear(todayIn(settings.timezone, now));
+  const seq = await nextSequence(`refund:${fy}`, session);
+  const refundId = new Types.ObjectId();
+  const updated = await Payment.updateOne(
+    {
+      _id: r.paymentId,
+      'refunds.idempotencyKey': { $ne: r.idempotencyKey },
+      $expr: { $lte: [{ $add: ['$refundedPaise', r.amountPaise] }, '$amountPaise'] },
+    },
+    {
+      $inc: { refundedPaise: r.amountPaise },
+      $push: {
+        refunds: {
+          _id: refundId,
+          refundNumber: `RFND/${fy}/${String(seq).padStart(4, '0')}`,
+          amountPaise: r.amountPaise,
+          method: r.method,
+          reason: r.reason,
+          status: r.status,
+          refundedAt: now,
+          refundedBy: r.refundedBy ? new Types.ObjectId(r.refundedBy) : undefined,
+          idempotencyKey: r.idempotencyKey,
+          gatewayRefundId: r.gatewayRefundId,
+        },
+      },
+    },
+    { session },
+  );
+  if (!updated.matchedCount) return null;
+  await Membership.updateOne(
+    { _id: r.membershipId },
+    { $inc: { paidPaise: -r.amountPaise } },
+    { session },
+  );
+  return refundId;
+}

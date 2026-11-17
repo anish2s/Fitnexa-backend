@@ -107,6 +107,7 @@ Notes for the frontend (Phase 2/3):
 | Payments: required Idempotency-Key, unique per gym; retries replay, key reuse for another payment refused; concurrent duplicates collapse to one | ✅ |
 | No overpayment at the desk: atomic `$expr` guard in the same transaction as the payment (parallel test) | ✅ |
 | Payment row, membership balance and receipt counter commit together or not at all; receipts gap-free | ✅ |
+| Refunds: owner-only by default (`payments:refund`), idempotent, can never exceed the payment (parallel test), audited with reason | ✅ |
 | CSV import: 1 MB / 2,000-row cap, parsed in memory without eval, same validation as the form, all-or-nothing transaction, needs `members:import` | ✅ |
 
 ## Email ✅ (transport) · 🟡 (live delivery)

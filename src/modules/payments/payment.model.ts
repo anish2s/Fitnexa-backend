@@ -32,7 +32,32 @@ const paymentSchema = new Schema(
       orderId: { type: String, maxlength: 64 },
       paymentId: { type: String, maxlength: 64 },
     },
+    /** Sum of refunds that are processed or pending (failed ones don't count). */
     refundedPaise: { type: Number, default: 0, min: 0 },
+    refunds: {
+      type: [
+        new Schema(
+          {
+            refundNumber: { type: String, required: true, maxlength: 40 },
+            amountPaise: { type: Number, required: true, min: 1 },
+            /** How the money went back. Gateway refunds go back to the original method. */
+            method: {
+              type: String,
+              enum: ['cash', 'upi', 'bank_transfer', 'gateway'],
+              required: true,
+            },
+            reason: { type: String, required: true, maxlength: 500 },
+            status: { type: String, enum: ['processed', 'pending', 'failed'], required: true },
+            refundedAt: { type: Date, required: true },
+            refundedBy: { type: Schema.Types.ObjectId },
+            idempotencyKey: { type: String, maxlength: 100 },
+            gatewayRefundId: { type: String, maxlength: 64 },
+          },
+          { _id: true },
+        ),
+      ],
+      default: [],
+    },
   },
   { timestamps: true },
 );
@@ -45,6 +70,10 @@ paymentSchema.index(
 paymentSchema.index(
   { tenantId: 1, 'gateway.paymentId': 1 },
   { unique: true, partialFilterExpression: { 'gateway.paymentId': { $type: 'string' } } },
+);
+paymentSchema.index(
+  { tenantId: 1, 'refunds.idempotencyKey': 1 },
+  { unique: true, partialFilterExpression: { 'refunds.idempotencyKey': { $type: 'string' } } },
 );
 paymentSchema.index({ tenantId: 1, membershipId: 1, receivedAt: 1 });
 paymentSchema.index({ tenantId: 1, memberId: 1, receivedAt: -1 });

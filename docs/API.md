@@ -160,7 +160,7 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`, `member.create`,
 `member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
 `member.photo_remove`, `member.import`, `plan.create`, `plan.update`, `plan.archive`, `plan.restore`, `membership.create`, `membership.renew`,
-`membership.cancel`, `payment.record`. Member names, birth dates,
+`membership.cancel`, `payment.record`, `payment.refund`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -305,6 +305,7 @@ or member is `409`. Generate a new key per intended payment, reuse it only for r
 | `GET /payments/:id` | — | payment with `membership` |
 | `GET /members/:id/payments` | — | that member's payments |
 | `GET /members/me/payments` | `self:read` (member) | own payments, without staff fields |
+| `POST /payments/:id/refunds` | `{ amountPaise, reason, method?: cash|upi|bank_transfer }` + `Idempotency-Key`; needs `payments:refund` (owner; grantable) | `201` payment with `refunds[]` and new membership balance |
 | `GET /payments/:id/receipt` | — | **PDF receipt** (`application/pdf`, inline, `receipt-RCPT-2026-27-0042.pdf`) |
 | `GET /members/me/payments/:id/receipt` | `self:read` (member) | own PDF receipt; someone else's is `404` |
 | `GET /memberships?due=true` | — | memberships (not cancelled) with money owed |
@@ -316,6 +317,11 @@ reference, receivedAt, receivedBy, notes, gateway, createdAt }`.
   `paymentStatus: unpaid|partial|paid|overpaid`. Part payments are normal.
 - A desk payment above the balance due is `422`. Cancelled memberships take no payments (`409`);
   expired ones can still collect old dues.
+- **Refunds** can be partial and repeated, never more than what is left on the payment (atomic
+  guard). Each gets `RFND/<FY>/<n>` (per gym, per FY, gap-free) and moves the membership balance in the
+  same transaction. Refunding doesn't cancel the membership; cancel separately if needed. Online
+  (Razorpay) payments are refunded through the gateway (step 4). Members see their refunds without the
+  internal reason. `refunds[]`: `{ id, refundNumber, amountPaise, method, status, refundedAt, reason, refundedBy }`.
 - `receivedAt` defaults to now; up to 90 days back for late entry, never in the future.
 - **Receipt numbers**: `<receiptPrefix>/<financial year>/<4+ digits>`, e.g. `RCPT/2026-27/0042`.
   Per gym, per Indian financial year (April–March, by the gym's local date of `receivedAt`).
