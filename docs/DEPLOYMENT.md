@@ -1,6 +1,8 @@
-# Deployment (draft — verified end to end in Milestone 10)
+# Deployment
 
-Nothing is deployed. Production actions require explicit approval (project Rule 8).
+_Verified end to end on 2026-11-17 against a clean clone in production mode behind a simulated proxy
+(see "Verification" below). Not yet run on a real host: nothing is deployed, and production actions
+need the owner's explicit approval (project Rule 7)._
 
 ## Target
 | Piece | Choice |
@@ -22,12 +24,20 @@ See `.env.example`. Production requirements enforced at startup:
 - Secrets only in the host's secret store, never in git.
 
 ## Build & run
+Node 22 (`.nvmrc`; `npm ci` refuses other versions).
 ```bash
-npm ci
+npm ci                     # dev tools are needed to build
 npm run build
+npm prune --omit=dev       # ship runtime dependencies only (~140 packages, ~50 MB)
 NODE_ENV=production node dist/server.js
 ```
-Health check path `/health`; readiness `/ready`. Graceful shutdown on SIGTERM (10 s drain).
+Ship `dist/`, `node_modules/` and `package.json` together. Health check path `/health`; readiness
+`/ready`. Graceful shutdown on SIGTERM: stops the scheduler, drains for up to 10 s, exits 0.
+
+The `*:prod` scripts and `node dist/server.js` read configuration from the **process environment**
+(the host's secret store), not from a `.env` file. If you keep an env file for a VM, **quote values
+with spaces or `<>`**, e.g. `MAIL_FROM="Gym App <no-reply@mail.yourapp.in>"`: an unquoted line stops
+`set -a; . file` from loading everything after it.
 
 ## Release steps
 `autoIndex` is off in production. On each release:
@@ -91,3 +101,28 @@ Startup refuses `resend` without a key or with a `localhost` sender. A provider 
 sign-in endpoints: magic-link and forgot-password still answer `202` (the failure is logged as
 `Email could not be sent`), and gym creation reports `inviteError: "send_failed"` so the invite can
 be resent. Watch the daily quota: past 100/day Resend refuses mail until the next day.
+
+## Verification (2026-11-17, local)
+Clean `git clone` → `npm ci` → `npm run build` → `npm prune --omit=dev`, production environment
+(`NODE_ENV=production`, Resend transport with a placeholder key, https links, `TRUST_PROXY=1`), a fresh
+MongoDB replica set, requests sent the way a proxy forwards them (internal `Host`, real host in
+`X-Forwarded-Host`, `X-Forwarded-Proto: https`):
+
+| Step | Result |
+|---|---|
+| Misconfigured production env (no CORS, http links, dev mail) | refused at startup, every problem listed, exit 1 |
+| `db:indexes:prod`, `admin:create:prod` (password from `ADMIN_PASSWORD`, never printed) | ✅ |
+| `seed` with `NODE_ENV=production` | refused ✅ |
+| `/health`, `/ready` (database up) | ✅ |
+| Gym resolved from `X-Forwarded-Host`; HSTS and security headers | ✅ |
+| Owner login; refresh cookie `__Host-gym_rt`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain` | ✅ |
+| Refresh from the gym's own origin ✅; from another gym's origin refused (CSRF) ✅ | ✅ |
+| CORS: own origin allowed; another gym's and foreign origins refused | ✅ |
+| Cross-gym token refused; `no-store` on API responses; JSON 404s without internals | ✅ |
+| Super admin (from `admin:create:prod`) signs in on the platform host | ✅ |
+| Swagger UI off in production; OpenAPI served | ✅ |
+| Scheduler started; no secrets/passwords/tokens in logs; member search terms redacted | ✅ |
+| SIGTERM → "Shutting down" → exit code 0 | ✅ |
+
+Still to do on the real host (needs the owner): DNS/TLS (Cloudflare), `TRUST_PROXY` matched to the
+real proxy chain, Atlas backups, error tracking, Resend domain, then one smoke test there.

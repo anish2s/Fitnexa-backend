@@ -96,7 +96,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 ### M10 — Hardening & Phase 1 gate
 - [x] OpenAPI 3.1 generated from the real routers + Zod schemas (99 operations, permissions, headers, CSV/PDF bodies); served at `/api/v1/openapi.json`, committed as `docs/openapi.json` with a drift test; Swagger UI at `/api/docs` in development
 - [x] Security review against SECURITY.md + automated route audit over every route (public allow-list, permissions, platform admin, id/body validation, idempotency, impersonation blocks); fixed: PII in request-log query strings, default `no-store`; dependency audit 0 vulnerabilities, in-range updates; no secrets in repo or history
-- [ ] Deployment instructions verified end to end
+- [x] Deployment instructions verified end to end **locally** (clean clone, production build with runtime deps only, production env, simulated proxy, 21 checks, graceful shutdown exit 0); doc fixed (Rule 7, prune step, ship package.json, env-file quoting). Real host still needs the owner (DNS/TLS, Atlas, Resend)
 - [ ] Phase 1 completion report
 
 ## Schedule reassessment
