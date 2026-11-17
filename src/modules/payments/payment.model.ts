@@ -78,6 +78,8 @@ paymentSchema.index(
 paymentSchema.index({ tenantId: 1, membershipId: 1, receivedAt: 1 });
 paymentSchema.index({ tenantId: 1, memberId: 1, receivedAt: -1 });
 paymentSchema.index({ tenantId: 1, receivedAt: -1 });
+// Revenue report: refunds by the day they were made.
+paymentSchema.index({ tenantId: 1, 'refunds.refundedAt': 1 });
 
 export type PaymentAttrs = InferSchemaType<typeof paymentSchema> & { tenantId: Types.ObjectId };
 export const Payment = model('Payment', paymentSchema);

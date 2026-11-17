@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–7 complete and verified against a real MongoDB 8.0 (live email, image upload and Razorpay round trip need credentials). Milestone 8 next.**
+**Phase 1 — Backend. Milestones 1–8 complete and verified against a real MongoDB 8.0 (live email, image upload and Razorpay round trip need credentials). Milestone 9 next.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -82,9 +82,9 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Rotating signed QR pass (per-gym key, 30 s windows, ~60–90 s validity); staff scan; manual check-in; admission needs an active membership (clear reason otherwise); desk sees photo + dues
 - [x] Duplicate prevention (unique per member per day; parallel scans → 1); gym-wide day list, member history, member's own history; daily report (QR/manual, busy hours, attendance rate); 14 tests + 7/7 compiled-server smoke
 
-### M8 — Dashboard statistics & reports
-- [ ] KPIs: total/active/new members, revenue (month), today's attendance, pending renewals
-- [ ] Reports: revenue, memberships, attendance, growth, renewals (date-range, gym timezone)
+### M8 — Dashboard statistics & reports ✅
+- [x] KPIs: total/active/new members, revenue this/last month (owner/reports:read only), today's attendance + rate, pending renewals (expiring soon, recently lapsed), dues outstanding
+- [x] Reports: revenue, memberships, attendance, growth, renewals: gym-local date range ≤ 366 days, day/week/month, zero-filled; 11 integration + 5 unit tests; compiled-server smoke 8/8
 
 ### M9 — Jobs, notifications, privacy
 - [ ] node-cron + Mongo lease lock; renewal reminder queue with retry
@@ -139,3 +139,5 @@ depend on the backend.
   vs forged webhook (raw-body HMAC), cross-gym read, no secrets in logs.
 - **2026-11-17** — M7 attendance: rotating QR pass, scan/manual check-in, one visit per day, history,
   daily report. 327 tests passing; compiled-server smoke 7/7.
+- **2026-11-17** — M8 dashboard + five reports. Revenue on the dashboard is owner-only by default
+  (front desk sees everything else). 343 tests passing; compiled-server smoke 8/8.

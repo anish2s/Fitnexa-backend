@@ -50,6 +50,8 @@ membershipSchema.index({ tenantId: 1, memberId: 1, startDate: -1 });
 // "Expiring soon" / "active today" scans.
 membershipSchema.index({ tenantId: 1, cancelledAt: 1, endDate: 1 });
 membershipSchema.index({ tenantId: 1, 'plan.planId': 1 });
+// Memberships report (sold per period).
+membershipSchema.index({ tenantId: 1, createdAt: 1 });
 // "Dues pending" lists.
 membershipSchema.index({ tenantId: 1, cancelledAt: 1, paidPaise: 1 });
 

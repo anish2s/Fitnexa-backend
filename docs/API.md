@@ -393,6 +393,41 @@ due to the desk.
   `details{ reason: expired|upcoming|none, date }` and a message like "Membership expired on 2026-11-10".
 - `attendanceRate` = check-ins ÷ members with an active membership that day (0–1).
 
+## Dashboard & reports (gym host)
+
+### `GET /dashboard` — `dashboard:read` (owner, staff)
+```jsonc
+{
+  "date": "2026-11-17",                                   // gym-local today
+  "members": { "total": 4, "active": 2, "newThisMonth": 0 }, // active = membership active today
+  "attendanceToday": { "checkIns": 1, "rate": 0.5 },
+  "pendingRenewals": { "expiringSoon": 1, "windowDays": 7, "recentlyLapsed": 1 },
+  "dues": { "outstandingPaise": 500000, "memberships": 2 },
+  "revenue": {                                            // null unless the caller has reports:read
+    "thisMonth": { "from": "2026-11-01", "to": "2026-11-17", "receivedPaise": 0, "refundedPaise": 0, "netPaise": 0 },
+    "lastMonth": { "from": "2026-10-01", "to": "2026-10-31", "receivedPaise": 0, "refundedPaise": 0, "netPaise": 0 }
+  }
+}
+```
+`expiringSoon`: ending within the gym's `renewalReminderDays`, not renewed, member not archived.
+`recentlyLapsed`: ended in the last 30 days without a renewal. **Revenue is hidden from front-desk
+staff** (owner's numbers); grant `reports:read` to show it.
+
+### `GET /reports/{revenue|memberships|attendance|growth|renewals}` — `reports:read` (owner; grantable)
+Query: `from`, `to` (gym-local `YYYY-MM-DD`, inclusive, ≤ 366 days; default the last 30 days) and
+`groupBy=day|week|month` (default by range length: ≤ 31 days → day, ≤ 92 → week, else month; weeks
+start Monday). Every report returns `{ from, to, groupBy, series[], totals, … }`; `series` has one
+row per period **including empty ones**, so charts need no gap-filling. Day, week and month totals
+always agree.
+
+| Report | `series[]` row | Extra |
+|---|---|---|
+| `revenue` | `{ period, receivedPaise, refundedPaise, netPaise, payments, refunds }` (refunds by the day they were made) | `byMethod{ cash|upi|card|bank_transfer|razorpay: { receivedPaise, payments } }` |
+| `memberships` | `{ period, sold, new, renewals, valuePaise, discountPaise, cancelled }` (by sale date) | `byPlan[]{ plan, sold, valuePaise }` |
+| `attendance` | `{ period, checkIns }` | `totals{ checkIns, uniqueMembers, averagePerDay }`, `byHour[24]`, `byWeekday[7]` |
+| `growth` | `{ period, asOf, joined, archived, totalMembers, activeMembers }` (the last two as of the period's end) | `totals{ joined, archived, netChange }` |
+| `renewals` | `{ period, ending, renewedOnTime, renewedLate, notRenewed, pending, renewalRate }` (by end date) | `renewalRate` = renewed ÷ (renewed + not renewed); `pending` = ends today or later, not renewed yet |
+
 ## Image uploads — `/api/v1/uploads` (gym host)
 
 Images go straight from the browser to Cloudinary; the API only signs the upload.

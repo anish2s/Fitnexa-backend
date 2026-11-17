@@ -140,7 +140,7 @@ pricePaise, taxMode, gstRate }` (snapshot at sale), `discountPaise`, `basePaise`
 `startDate`, `endDate` (calendar dates, inclusive), `kind` (`new/renewal`), `previousMembershipId`,
 `soldBy`, `notes`, `cancelledAt` (explicit null), `cancelledBy`, `cancelReason`.
 Status is derived, never stored. Indexes: `{ tenantId, memberId, startDate: -1 }`,
-`{ tenantId, cancelledAt, endDate }`, `{ tenantId, plan.planId }`.
+`{ tenantId, cancelledAt, endDate }`, `{ tenantId, plan.planId }`, `{ tenantId, createdAt }` (memberships report).
 Members carry a hidden `membershipRev` counter, bumped in every sale's transaction so concurrent sales
 for one member serialise (overlap check can't be raced).
 
@@ -152,7 +152,7 @@ for one member serialise (overlap check can't be raced).
 (+ index `{ tenantId, refunds.idempotencyKey } unique partial`).
 Indexes: `{ tenantId, receiptNumber } unique`, `{ tenantId, idempotencyKey } unique partial`,
 `{ tenantId, gateway.paymentId } unique partial`, `{ tenantId, membershipId, receivedAt }`,
-`{ tenantId, memberId, receivedAt: -1 }`, `{ tenantId, receivedAt: -1 }`.
+`{ tenantId, memberId, receivedAt: -1 }`, `{ tenantId, receivedAt: -1 }`, `{ tenantId, refunds.refundedAt }` (revenue report).
 Written only by `payment.ledger.ts` inside a transaction that also updates `memberships.paidPaise`
 and the `receipt:<FY>` counter. Memberships gained `paidPaise` and index `{ tenantId, cancelledAt, paidPaise }`. · jobLocks / notifications ⬜ M9
 
