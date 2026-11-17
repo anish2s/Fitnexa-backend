@@ -84,7 +84,8 @@ Optional; desk payments never need it.
 2. Leave `RAZORPAY_ALLOW_LIVE=false` until the owner approves real charges. Only `rzp_test_` keys
    are accepted until then.
 3. Each gym owner: Razorpay dashboard → API keys (test mode) → paste Key Id + Key Secret in the gym
-   settings; Webhooks → add the URL shown in settings, a secret of their choice (same one in
+   settings (until the dashboard exists: `npm run razorpay:connect -- --gym <subdomain>`, which asks for
+   them in the terminal, hides the secret, and prints a generated webhook secret once); Webhooks → add the URL shown in settings, a secret of their choice (same one in
    settings), events `payment.captured`, `order.paid`, `refund.processed`, `refund.failed`.
 
 ## Email (Resend)

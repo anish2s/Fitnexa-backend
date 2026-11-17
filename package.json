@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check src tests",
-    "openapi": "tsx src/scripts/export-openapi.ts"
+    "openapi": "tsx src/scripts/export-openapi.ts",
+    "razorpay:connect": "tsx --env-file-if-exists=.env src/scripts/connect-razorpay.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",
