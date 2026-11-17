@@ -51,3 +51,46 @@ export function periodEnd(start: Date, months: number): Date {
   if (d > lastDayOfTarget) return new Date(Date.UTC(y, m, lastDayOfTarget));
   return new Date(Date.UTC(y, m, d - 1));
 }
+
+/**
+ * Indian financial year (April–March) of a calendar date string `YYYY-MM-DD`, e.g. 2026-04-01 and
+ * 2027-03-31 are both "2026-27".
+ */
+export function financialYear(dateOnly: string): string {
+  const [y, m] = dateOnly.split('-').map(Number) as [number, number];
+  const start = m >= 4 ? y : y - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+}
+
+/** Minutes the zone is ahead of UTC at `at` (IST = +330). */
+function zoneOffsetMinutes(timeZone: string, at: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(at);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+  const asUtc = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    get('hour'),
+    get('minute'),
+    get('second'),
+  );
+  return Math.round((asUtc - at.getTime()) / 60_000);
+}
+
+/** The instant a calendar day starts in a time zone: 2026-04-01 in Asia/Kolkata → 2026-03-31T18:30Z. */
+export function startOfDayIn(dateOnly: string, timeZone: string): Date {
+  const guess = parseDateOnly(dateOnly)!;
+  let t = guess.getTime() - zoneOffsetMinutes(timeZone, guess) * 60_000;
+  // Second pass settles DST transitions (India has none; other zones might).
+  t = guess.getTime() - zoneOffsetMinutes(timeZone, new Date(t)) * 60_000;
+  return new Date(t);
+}

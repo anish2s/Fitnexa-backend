@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–5 complete and verified against a real MongoDB 8.0 (live email and image upload blocked on credentials). Milestone 6 next.**
+**Phase 1 — Backend. Milestones 1–5 complete and verified against a real MongoDB 8.0 (live email and image upload blocked on credentials). Milestone 6 in progress.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -69,11 +69,12 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Sell, renew (from expiry or today), cancel, history (staff + member app); derived status; gym-wide status lists; expiring-soon excluding renewed/archived; no overlaps (race-safe); price snapshot; 13 integration tests
 
 ### M6 — Payments & receipts
-- [ ] Cash / UPI / card recording with idempotency
-- [ ] Receipt numbering (per gym, per FY) + PDF receipt
-- [ ] Partial payments / balance due
+- [x] Cash / UPI / card / bank transfer recording; required Idempotency-Key (replay, conflict on reuse, race-safe); sell + collect in one transaction
+- [x] Receipt numbering per gym per Indian FY, gap-free (counter in the payment transaction)
+- [ ] PDF receipt
+- [x] Partial payments / balance due / payment status / dues list; atomic no-overpay guard (5 parallel → 2 accepted)
 - [ ] Razorpay order + verification + webhooks (test keys), refunds
-- [ ] Transactions for payment + membership + counter
+- [x] Transactions for payment + membership + counter
 
 ### M7 — Attendance
 - [ ] Rotating signed QR pass; staff scan endpoint; manual check-in

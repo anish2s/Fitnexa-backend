@@ -104,6 +104,9 @@ Notes for the frontend (Phase 2/3):
 | Live upload against Cloudinary | 🟡 blocked: needs credentials |
 | Memberships: no overlapping periods, enforced in a transaction that serialises sales per member (6 parallel sales → 1 created) | ✅ |
 | Price/tax snapshot at sale; amounts computed server-side from the plan, never taken from the client | ✅ |
+| Payments: required Idempotency-Key, unique per gym; retries replay, key reuse for another payment refused; concurrent duplicates collapse to one | ✅ |
+| No overpayment at the desk: atomic `$expr` guard in the same transaction as the payment (parallel test) | ✅ |
+| Payment row, membership balance and receipt counter commit together or not at all; receipts gap-free | ✅ |
 | CSV import: 1 MB / 2,000-row cap, parsed in memory without eval, same validation as the form, all-or-nothing transaction, needs `members:import` | ✅ |
 
 ## Email ✅ (transport) · 🟡 (live delivery)

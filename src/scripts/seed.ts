@@ -2,8 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import mongoose, { Types } from 'mongoose';
 import { hashPassword } from '../auth/password.js';
-import { Member, Membership, Plan, PlatformAdmin, Tenant, User } from '../db/models.js';
-import { addDays, parseDateOnly, periodEnd, todayIn } from '../lib/dates.js';
+import { Member, Membership, Payment, Plan, PlatformAdmin, Tenant, User } from '../db/models.js';
+import { addDays, financialYear, parseDateOnly, periodEnd, todayIn } from '../lib/dates.js';
 import { PLAN_DURATIONS, type PlanDuration } from '../modules/plans/plan.model.js';
 import { priceBreakdown } from '../lib/money.js';
 import { nextSequence } from '../modules/counters/counter.model.js';
@@ -34,7 +34,13 @@ interface DemoGym {
     name: string;
     email?: string;
     phone: string;
-    membership?: { plan: string; startedDaysAgo: number };
+    membership?: {
+      plan: string;
+      startedDaysAgo: number;
+      /** Paid so far: 'full', a rupee amount, or nothing (unpaid). */
+      paid?: 'full' | number;
+      method?: 'cash' | 'upi';
+    };
   }[];
 }
 
@@ -62,7 +68,7 @@ export const DEMO_GYMS: DemoGym[] = [
         name: 'Arjun Sharma',
         email: 'arjun@member.demo',
         phone: '+919811111111',
-        membership: { plan: 'Monthly', startedDaysAgo: 25 },
+        membership: { plan: 'Monthly', startedDaysAgo: 25, paid: 500, method: 'cash' },
       },
       // Quarterly, started 100 days ago: expired about 10 days ago.
       {
@@ -76,7 +82,7 @@ export const DEMO_GYMS: DemoGym[] = [
         name: 'Vikram Singh',
         email: 'vikram@member.demo',
         phone: '+919811111113',
-        membership: { plan: 'Annual', startedDaysAgo: 30 },
+        membership: { plan: 'Annual', startedDaysAgo: 30, paid: 'full', method: 'cash' },
       },
       // No email: managed by the front desk, no member-app access.
       { name: 'Suresh Kumar', phone: '+919833333331' },
@@ -95,7 +101,7 @@ export const DEMO_GYMS: DemoGym[] = [
         name: 'Arjun Sharma',
         email: 'arjun@member.demo',
         phone: '+919811111111',
-        membership: { plan: 'Quarterly', startedDaysAgo: 10 },
+        membership: { plan: 'Quarterly', startedDaysAgo: 10, paid: 'full', method: 'upi' },
       },
       { name: 'Meera Iyer', email: 'meera@member.demo', phone: '+919822222222' },
       { name: 'Rohan Das', email: 'rohan@member.demo', phone: '+919822222223' },
@@ -187,7 +193,10 @@ export async function seedDemo(
           const plan = plans.get(sold.plan)!;
           const today = parseDateOnly(todayIn('Asia/Kolkata'))!;
           const startDate = addDays(today, -sold.startedDaysAgo);
-          await Membership.create({
+          const breakdown = priceBreakdown(plan.pricePaise, plan.taxMode, plan.gstRate);
+          const paidPaise =
+            sold.paid === 'full' ? breakdown.totalPaise : sold.paid ? sold.paid * 100 : 0;
+          const membership = await Membership.create({
             memberId,
             plan: {
               planId: plan._id,
@@ -199,11 +208,27 @@ export async function seedDemo(
               gstRate: plan.gstRate,
             },
             discountPaise: 0,
-            ...priceBreakdown(plan.pricePaise, plan.taxMode, plan.gstRate),
+            ...breakdown,
             startDate,
             endDate: periodEnd(startDate, plan.months),
             kind: 'new',
+            paidPaise,
           });
+          if (paidPaise) {
+            // Same numbering as the payments API: per gym, per financial year.
+            const receivedAt = new Date(startDate.getTime() + 11 * 3_600_000);
+            const fy = financialYear(todayIn('Asia/Kolkata', receivedAt));
+            const seq = await nextSequence(`receipt:${fy}`);
+            await Payment.create({
+              memberId,
+              membershipId: membership._id,
+              amountPaise: paidPaise,
+              method: sold.method ?? 'cash',
+              receiptNumber: `RCPT/${fy}/${String(seq).padStart(4, '0')}`,
+              financialYear: fy,
+              receivedAt,
+            });
+          }
         }
       }
     });

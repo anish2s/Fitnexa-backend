@@ -112,7 +112,7 @@ disabled in the same transaction as the member.
 
 ### counters ✅ (tenant-scoped)
 `src/modules/counters/counter.model.ts`. `key`, `seq`; `{ tenantId, key } unique`. Atomic `$inc` with
-upsert. Keys: `memberCode` (receipt numbers join in M6).
+upsert. Keys: `memberCode`, `receipt:<financial year>` (e.g. `receipt:2026-27`).
 
 ### plans ✅ (tenant-scoped)
 `src/modules/plans/plan.model.ts`. `name`, `nameKey` (lower-cased), `description`, `duration` (`monthly/quarterly/half_yearly/yearly`), `months` (1/3/6/12, for sorting),
@@ -130,6 +130,14 @@ Status is derived, never stored. Indexes: `{ tenantId, memberId, startDate: -1 }
 Members carry a hidden `membershipRev` counter, bumped in every sale's transaction so concurrent sales
 for one member serialise (overlap check can't be raced).
 
-### payments ⬜ M6 · attendance ⬜ M7 · jobLocks / notifications ⬜ M9
+### payments ✅ (tenant-scoped)
+`src/modules/payments/payment.model.ts`. `memberId`, `membershipId`, `amountPaise`, `method`
+(`cash/upi/card/bank_transfer/razorpay`), `reference`, `receiptNumber`, `financialYear`, `receivedAt`,
+`receivedBy`, `notes`, `idempotencyKey`, `gateway { provider, orderId, paymentId }`, `refundedPaise`.
+Indexes: `{ tenantId, receiptNumber } unique`, `{ tenantId, idempotencyKey } unique partial`,
+`{ tenantId, gateway.paymentId } unique partial`, `{ tenantId, membershipId, receivedAt }`,
+`{ tenantId, memberId, receivedAt: -1 }`, `{ tenantId, receivedAt: -1 }`.
+Written only by `payment.ledger.ts` inside a transaction that also updates `memberships.paidPaise`
+and the `receipt:<FY>` counter. Memberships gained `paidPaise` and index `{ tenantId, cancelledAt, paidPaise }`. · attendance ⬜ M7 · jobLocks / notifications ⬜ M9
 
 Field lists as in the review table above; each gets its own section here when implemented.

@@ -27,6 +27,11 @@ const membershipSchema = new Schema(
     basePaise: { type: Number, required: true, min: 0 },
     gstPaise: { type: Number, required: true, min: 0 },
     totalPaise: { type: Number, required: true, min: 0 },
+    /**
+     * Money received for this membership, net of refunds. Changed only inside a payment or refund
+     * transaction, together with the payment row and receipt counter. Balance = total - paid.
+     */
+    paidPaise: { type: Number, default: 0 },
     /** Calendar dates (UTC midnight), both inclusive. */
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
@@ -45,6 +50,8 @@ membershipSchema.index({ tenantId: 1, memberId: 1, startDate: -1 });
 // "Expiring soon" / "active today" scans.
 membershipSchema.index({ tenantId: 1, cancelledAt: 1, endDate: 1 });
 membershipSchema.index({ tenantId: 1, 'plan.planId': 1 });
+// "Dues pending" lists.
+membershipSchema.index({ tenantId: 1, cancelledAt: 1, paidPaise: 1 });
 
 export type MembershipAttrs = InferSchemaType<typeof membershipSchema> & {
   tenantId: Types.ObjectId;

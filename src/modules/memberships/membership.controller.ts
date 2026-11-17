@@ -8,10 +8,15 @@ import type {
   SellInput,
 } from './membership.schemas.js';
 import type { MembershipService } from './membership.service.js';
+import { idempotencyKeyOf } from '../payments/payment.controller.js';
 
 export function createMembershipController(svc: MembershipService) {
   const idOf = (req: Request) => (req.valid.params as { id: string }).id;
   const noStore = (res: Response) => res.set('Cache-Control', 'no-store');
+  const send = (res: Response, r: { membership: unknown; replayed: boolean }) => {
+    if (r.replayed) res.set('Idempotent-Replayed', 'true');
+    return r.replayed ? ok(res, r.membership) : created(res, r.membership);
+  };
   return {
     async list(req: Request, res: Response) {
       const { items, meta } = await svc.list(req.valid.query as MembershipListQuery);
@@ -32,10 +37,14 @@ export function createMembershipController(svc: MembershipService) {
       ok(res, await svc.history(idOf(req)));
     },
     async create(req: Request, res: Response) {
-      created(res, await svc.create(idOf(req), req.valid.body as SellInput, auditContextFrom(req)));
+      const body = req.valid.body as SellInput;
+      const key = body.payment ? idempotencyKeyOf(req) : undefined;
+      send(res, await svc.create(idOf(req), body, auditContextFrom(req), key));
     },
     async renew(req: Request, res: Response) {
-      created(res, await svc.renew(idOf(req), req.valid.body as RenewInput, auditContextFrom(req)));
+      const body = req.valid.body as RenewInput;
+      const key = body.payment ? idempotencyKeyOf(req) : undefined;
+      send(res, await svc.renew(idOf(req), body, auditContextFrom(req), key));
     },
     async selfHistory(req: Request, res: Response) {
       noStore(res);

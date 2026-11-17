@@ -160,7 +160,7 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`, `member.create`,
 `member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
 `member.photo_remove`, `member.import`, `plan.create`, `plan.update`, `plan.archive`, `plan.restore`, `membership.create`, `membership.renew`,
-`membership.cancel`. Member names, birth dates,
+`membership.cancel`, `payment.record`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -287,6 +287,37 @@ cancelReason, notes, soldBy, previousMembershipId, createdAt }`.
   `expiry` while the latest is current/upcoming, otherwise `today`. Plan defaults to the last one.
 - `summary`: `{ status: active|upcoming|expired|none, current, nextStartDate }`. Member detail
   (`GET /members/:id`) includes the same object as `membership`.
+
+## Payments (gym host)
+
+Reading needs `payments:read`; recording `payments:record` (owner and staff).
+
+**Every request that records money needs an `Idempotency-Key` header** (8–100 of `A-Z a-z 0-9 _ -`;
+a UUID is ideal). Retrying with the same key returns the original result (`200`, header
+`Idempotent-Replayed: true`) instead of charging twice. The same key with a different amount, method
+or member is `409`. Generate a new key per intended payment, reuse it only for retries.
+
+| Method & path | Body / query | Result |
+|---|---|---|
+| `POST /memberships/:id/payments` | `{ amountPaise, method: cash|upi|card|bank_transfer, reference?, receivedAt?, notes? }` | `201` payment with `membership` (new balance) |
+| `POST /members/:id/memberships` · `/renew` | usual body + `payment?: { … as above }` | `201` membership + `payment`: sale, payment and receipt in one transaction |
+| `GET /payments` | `?from&to` (gym-local dates, inclusive) `&method&memberId&page&limit` | payments with `member`; `meta.totals{ receivedPaise, refundedPaise, netPaise }` over the whole filter |
+| `GET /payments/:id` | — | payment with `membership` |
+| `GET /members/:id/payments` | — | that member's payments |
+| `GET /members/me/payments` | `self:read` (member) | own payments, without staff fields |
+| `GET /memberships?due=true` | — | memberships (not cancelled) with money owed |
+
+Payment: `{ id, receiptNumber, financialYear, memberId, membershipId, amountPaise, refundedPaise, method,
+reference, receivedAt, receivedBy, notes, gateway, createdAt }`.
+
+- Memberships now carry `paidPaise`, `balancePaise` (negative = overpaid) and
+  `paymentStatus: unpaid|partial|paid|overpaid`. Part payments are normal.
+- A desk payment above the balance due is `422`. Cancelled memberships take no payments (`409`);
+  expired ones can still collect old dues.
+- `receivedAt` defaults to now; up to 90 days back for late entry, never in the future.
+- **Receipt numbers**: `<receiptPrefix>/<financial year>/<4+ digits>`, e.g. `RCPT/2026-27/0042`.
+  Per gym, per Indian financial year (April–March, by the gym's local date of `receivedAt`).
+  Allocated inside the payment's transaction: unique and gap-free, a failed payment uses no number.
 
 ## Image uploads — `/api/v1/uploads` (gym host)
 

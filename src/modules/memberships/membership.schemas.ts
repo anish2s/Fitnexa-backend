@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { parseDateOnly } from '../../lib/dates.js';
 import { objectId, pageQuery } from '../../lib/pagination.js';
+import { offlinePayment } from '../payments/payment.schemas.js';
 
 const DAY = 86_400_000;
 /** Back-dating up to a year covers entering existing members; far-future dates are typos. */
@@ -31,6 +32,8 @@ export const sellBody = z.object({
   startDate: startDate.optional(),
   discountPaise: discountPaise.optional(),
   notes: notes.optional(),
+  /** Collect the first payment in the same step; needs an Idempotency-Key header. */
+  payment: offlinePayment.optional(),
 });
 
 export const renewBody = z.object({
@@ -44,6 +47,7 @@ export const renewBody = z.object({
   startFrom: z.enum(['expiry', 'today']).optional(),
   discountPaise: discountPaise.optional(),
   notes: notes.optional(),
+  payment: offlinePayment.optional(),
 });
 
 export const cancelBody = z.object({ reason: z.string().trim().min(3).max(500) });
@@ -53,6 +57,11 @@ export const STATUSES = ['active', 'upcoming', 'expired', 'cancelled'] as const;
 export const membershipListQuery = pageQuery.extend({
   status: z.enum(STATUSES).optional(),
   planId: objectId.optional(),
+  /** true: only memberships with money still owed (not cancelled). */
+  due: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 export const expiringQuery = pageQuery.extend({

@@ -20,6 +20,10 @@ import type { LeanPlan } from '../plans/plan.service.js';
 import { Tenant } from '../tenants/tenant.model.js';
 import { User } from '../users/user.model.js';
 import { Membership } from './membership.model.js';
+import { gymPaymentSettings, insertPayment, isDuplicateKey } from '../payments/payment.ledger.js';
+import { Payment } from '../payments/payment.model.js';
+import type { OfflinePaymentInput } from '../payments/payment.schemas.js';
+import { assertSameRequest, toPaymentView, type LeanPayment } from '../payments/payment.view.js';
 import type {
   ExpiringQuery,
   MembershipListQuery,
@@ -45,6 +49,7 @@ export type LeanMembership = {
   basePaise: number;
   gstPaise: number;
   totalPaise: number;
+  paidPaise?: number;
   startDate: Date;
   endDate: Date;
   kind: 'new' | 'renewal';
@@ -80,6 +85,13 @@ export function statusFilter(status: MembershipStatus, today: Date): Record<stri
   }
 }
 
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'overpaid';
+export function paymentStatusOf(total: number, paid: number): PaymentStatus {
+  if (paid > total) return 'overpaid';
+  if (paid === total) return 'paid';
+  return paid > 0 ? 'partial' : 'unpaid';
+}
+
 export function toMembershipView(
   m: LeanMembership,
   today: Date,
@@ -102,6 +114,10 @@ export function toMembershipView(
     basePaise: m.basePaise,
     gstPaise: m.gstPaise,
     totalPaise: m.totalPaise,
+    paidPaise: m.paidPaise ?? 0,
+    /** Negative = overpaid (e.g. a gateway payment arrived after a desk payment); refundable. */
+    balancePaise: m.totalPaise - (m.paidPaise ?? 0),
+    paymentStatus: paymentStatusOf(m.totalPaise, m.paidPaise ?? 0),
     startDate: formatDateOnly(m.startDate),
     endDate: formatDateOnly(m.endDate),
     kind: m.kind,
@@ -195,6 +211,8 @@ export function createMembershipService(deps: { audit: AuditService }) {
       notes?: string;
       kind: 'new' | 'renewal';
       previous?: LeanMembership | null;
+      /** Take the first payment in the same transaction (front desk "sell and collect"). */
+      payment?: { input: OfflinePaymentInput; key: string };
     },
     ctx: AuditContext,
     today: Date,
@@ -208,6 +226,13 @@ export function createMembershipService(deps: { audit: AuditService }) {
     const endDate = periodEnd(startDate, plan.months);
     const money = priceBreakdown(plan.pricePaise, plan.taxMode, plan.gstRate, args.discountPaise);
     const id = new Types.ObjectId();
+    if (args.payment && args.payment.input.amountPaise > money.totalPaise) {
+      throw Errors.validation([
+        { path: 'payment.amountPaise', message: 'Payment is more than the membership total' },
+      ]);
+    }
+    const settings = args.payment ? await gymPaymentSettings() : null;
+    let paymentId: Types.ObjectId | undefined;
 
     const session = await mongoose.startSession();
     try {
@@ -256,7 +281,32 @@ export function createMembershipService(deps: { audit: AuditService }) {
           ],
           { session },
         );
+        if (args.payment) {
+          const pay = args.payment.input;
+          paymentId = await insertPayment(
+            session,
+            {
+              membershipId: id,
+              memberId: new Types.ObjectId(memberId),
+              amountPaise: pay.amountPaise,
+              method: pay.method,
+              reference: pay.reference,
+              receivedAt: pay.receivedAt ?? new Date(),
+              notes: pay.notes,
+              idempotencyKey: args.payment.key,
+              receivedBy: ctx.actor.id,
+              enforceBalance: true,
+            },
+            settings!,
+          );
+        }
       });
+    } catch (err) {
+      if (args.payment && isDuplicateKey(err, 'idempotencyKey')) {
+        const replay = await replayed(memberId, args.payment);
+        if (replay) return replay;
+      }
+      throw err;
     } finally {
       await session.endSession();
     }
@@ -274,10 +324,47 @@ export function createMembershipService(deps: { audit: AuditService }) {
       },
     });
     const created = await Membership.findById(id).lean<LeanMembership>();
-    return toMembershipView(created!, today);
+    let payment = null;
+    if (paymentId) {
+      const p = await Payment.findById(paymentId).lean<LeanPayment>();
+      payment = toPaymentView(p!);
+      await audit.record(ctx, {
+        action: 'payment.record',
+        target: { type: 'payment', id: String(paymentId) },
+        metadata: {
+          receiptNumber: p!.receiptNumber,
+          amountPaise: p!.amountPaise,
+          method: p!.method,
+          membershipId: String(id),
+        },
+      });
+    }
+    return { membership: { ...toMembershipView(created!, today), payment }, replayed: false };
   }
 
-  async function create(memberId: string, input: SellInput, ctx: AuditContext) {
+  /** A sale-with-payment whose Idempotency-Key was seen before: return the original result. */
+  async function replayed(memberId: string, pay: { input: OfflinePaymentInput; key: string }) {
+    const prior = await Payment.findOne({ idempotencyKey: pay.key }).lean<LeanPayment>();
+    if (!prior) return null;
+    assertSameRequest(prior, {
+      memberId,
+      amountPaise: pay.input.amountPaise,
+      method: pay.input.method,
+    });
+    const { today } = await gymCalendar();
+    const m = await Membership.findById(prior.membershipId).lean<LeanMembership>();
+    return {
+      membership: { ...toMembershipView(m!, today), payment: toPaymentView(prior) },
+      replayed: true,
+    };
+  }
+
+  async function create(memberId: string, input: SellInput, ctx: AuditContext, key?: string) {
+    const payment = input.payment ? { input: input.payment, key: key! } : undefined;
+    if (payment) {
+      const replay = await replayed(memberId, payment);
+      if (replay) return replay;
+    }
     const { today } = await gymCalendar();
     await liveMember(memberId);
     const plan = await livePlan(input.planId);
@@ -290,13 +377,19 @@ export function createMembershipService(deps: { audit: AuditService }) {
         discountPaise: input.discountPaise ?? 0,
         notes: input.notes,
         kind: hadAny ? 'renewal' : 'new',
+        payment,
       },
       ctx,
       today,
     );
   }
 
-  async function renew(memberId: string, input: RenewInput, ctx: AuditContext) {
+  async function renew(memberId: string, input: RenewInput, ctx: AuditContext, key?: string) {
+    const payment = input.payment ? { input: input.payment, key: key! } : undefined;
+    if (payment) {
+      const replay = await replayed(memberId, payment);
+      if (replay) return replay;
+    }
     const { today } = await gymCalendar();
     await liveMember(memberId);
     const latest = await latestOf(memberId);
@@ -319,6 +412,7 @@ export function createMembershipService(deps: { audit: AuditService }) {
         notes: input.notes,
         kind: latest ? 'renewal' : 'new',
         previous: latest,
+        payment,
       },
       ctx,
       today,
@@ -418,6 +512,11 @@ export function createMembershipService(deps: { audit: AuditService }) {
   async function list(q: MembershipListQuery) {
     const { today } = await gymCalendar();
     const filter: Record<string, unknown> = q.status ? statusFilter(q.status, today) : {};
+    if (q.due) {
+      // Money still owed on memberships that weren't cancelled.
+      filter.cancelledAt = null;
+      filter.$expr = { $gt: ['$totalPaise', '$paidPaise'] };
+    }
     if (q.planId) filter['plan.planId'] = new Types.ObjectId(q.planId);
     const [rows, total] = await Promise.all([
       Membership.find(filter)

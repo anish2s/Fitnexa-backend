@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateOnly, parseDateOnly, periodEnd, todayIn } from '../../src/lib/dates.js';
+import {
+  financialYear,
+  formatDateOnly,
+  parseDateOnly,
+  periodEnd,
+  startOfDayIn,
+  todayIn,
+} from '../../src/lib/dates.js';
 
 const end = (start: string, months: number) =>
   formatDateOnly(periodEnd(parseDateOnly(start)!, months));
@@ -44,5 +51,27 @@ describe('todayIn', () => {
     // 20:00 UTC on 31 Mar is already 1 Apr in India.
     expect(todayIn('Asia/Kolkata', new Date('2026-03-31T20:00:00Z'))).toBe('2026-04-01');
     expect(todayIn('UTC', new Date('2026-03-31T20:00:00Z'))).toBe('2026-03-31');
+  });
+});
+
+describe('financialYear', () => {
+  it('runs April to March', () => {
+    expect(financialYear('2026-04-01')).toBe('2026-27');
+    expect(financialYear('2027-03-31')).toBe('2026-27');
+    expect(financialYear('2026-03-31')).toBe('2025-26');
+    expect(financialYear('2099-12-01')).toBe('2099-00');
+  });
+});
+
+describe('startOfDayIn', () => {
+  it('is local midnight as a UTC instant', () => {
+    expect(startOfDayIn('2026-04-01', 'Asia/Kolkata').toISOString()).toBe(
+      '2026-03-31T18:30:00.000Z',
+    );
+    expect(startOfDayIn('2026-04-01', 'UTC').toISOString()).toBe('2026-04-01T00:00:00.000Z');
+    // DST zone: New York is UTC-4 in July.
+    expect(startOfDayIn('2026-07-01', 'America/New_York').toISOString()).toBe(
+      '2026-07-01T04:00:00.000Z',
+    );
   });
 });

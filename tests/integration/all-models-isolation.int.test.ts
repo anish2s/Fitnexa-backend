@@ -16,6 +16,7 @@ const TENANT_SCOPED = [
   'Counter',
   'Member',
   'Membership',
+  'Payment',
   'Plan',
   'Session',
   'User',
