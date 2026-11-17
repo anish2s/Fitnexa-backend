@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–9 complete and verified against a real MongoDB 8.0; Cloudinary verified live (live email and Razorpay round trip still need credentials). Milestone 10 (hardening + Phase 1 gate) next.**
+**Phase 1 — Backend. Milestones 1–10 complete; [completion report](PHASE1-REPORT.md) awaiting the owner's approval. Phase 2 does not start until approved.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -93,11 +93,11 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] WhatsApp `wa.me` links (renewal, payment due, welcome, custom); ready link on every expiring-soon row; 7 tests
 - [x] DPDP export (owner + member self) and erase (owner-only, confirmed, irreversible; personal data removed, financial/attendance records kept anonymised, photo deleted); 6 tests
 
-### M10 — Hardening & Phase 1 gate
+### M10 — Hardening & Phase 1 gate ✅
 - [x] OpenAPI 3.1 generated from the real routers + Zod schemas (99 operations, permissions, headers, CSV/PDF bodies); served at `/api/v1/openapi.json`, committed as `docs/openapi.json` with a drift test; Swagger UI at `/api/docs` in development
 - [x] Security review against SECURITY.md + automated route audit over every route (public allow-list, permissions, platform admin, id/body validation, idempotency, impersonation blocks); fixed: PII in request-log query strings, default `no-store`; dependency audit 0 vulnerabilities, in-range updates; no secrets in repo or history
 - [x] Deployment instructions verified end to end **locally** (clean clone, production build with runtime deps only, production env, simulated proxy, 21 checks, graceful shutdown exit 0); doc fixed (Rule 7, prune step, ship package.json, env-file quoting). Real host still needs the owner (DNS/TLS, Atlas, Resend)
-- [ ] Phase 1 completion report
+- [x] Phase 1 completion report: [PHASE1-REPORT.md](PHASE1-REPORT.md), **awaiting owner approval**
 
 ## Schedule reassessment
 No existing code, so the plan stands. At 2–3 h/day, M2–M10 is roughly 4–5 weeks, which fits the
@@ -158,3 +158,6 @@ depend on the backend.
   updated (ARCHITECTURE status/tree, DATABASE plan note, SECURITY/DATABASE headers, README).
   Remaining before the Phase 1 gate: live Resend email, live Razorpay test payment (both need
   credentials), two open owner decisions, and M10.
+- **2026-11-17** — M10: OpenAPI 3.1 from the real routers (99 operations, drift test), automated
+  route security audit (fixed PII in request logs, default no-store), dependency audit 0, deployment
+  rehearsed in production mode (21 checks, clean shutdown), Phase 1 report written. 384 tests.

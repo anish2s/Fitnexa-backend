@@ -6,9 +6,9 @@ many gyms (`powerhouse.yourapp.in`, `fitzone.yourapp.in`, …) with strict per-g
 The admin dashboard and member PWA live in a separate repository, **gym-saas-web**, and talk to
 this API only through its documented REST endpoints.
 
-**Status:** Phase 1 (backend): milestones 1–9 built and tested (369 tests against a real MongoDB);
-M10 (API docs, security review, deployment check, completion report) next.
-See [progress](docs/PROGRESS.md).
+**Status:** Phase 1 (backend) complete: 384 tests against a real MongoDB; see the
+[Phase 1 report](docs/PHASE1-REPORT.md) (awaiting approval) and [progress](docs/PROGRESS.md).
+API contract: [`docs/openapi.json`](docs/openapi.json) (OpenAPI 3.1).
 
 What's in it: per-gym isolation by subdomain, owner/staff/member auth, super-admin console with
 audited "log in as owner", staff and members (CSV import, photos), plans with GST, memberships and
