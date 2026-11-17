@@ -1,0 +1,6 @@
+{
+  // Use the project's TypeScript (package.json), not the version bundled with VS Code, so the
+  // editor reports exactly what `npm run typecheck` reports.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true
+}
