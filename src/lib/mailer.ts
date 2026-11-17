@@ -1,3 +1,4 @@
+import type { Env } from '../config/env.js';
 import type { Logger } from './logger.js';
 
 export interface MailMessage {
@@ -9,9 +10,10 @@ export interface MailMessage {
 }
 
 /**
- * Email delivery interface. Real providers (Resend / SES / SMTP) plug in here in Milestone 9.
- * Until then nothing leaves the machine: project Rule 8 forbids sending real notifications
- * without approval, and config validation refuses to start production without a real provider.
+ * Email delivery interface. `send` throws when the provider refuses or can't be reached; callers
+ * decide whether that fails the request (see safeSend in auth.service.ts).
+ *
+ * Transports: `log` (dev), `memory` (tests), `resend` (real delivery; owner's choice 2026-11-17).
  */
 export interface Mailer {
   send(message: MailMessage): Promise<void>;
@@ -42,4 +44,90 @@ export function memoryMailer() {
     },
   };
   return mailer;
+}
+
+/** Raised by real transports. Carries no recipient or message content (both may be personal). */
+export class MailSendError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly providerCode?: string,
+  ) {
+    super(message);
+    this.name = 'MailSendError';
+  }
+}
+
+export interface ResendOptions {
+  apiKey: string;
+  from: string;
+  logger: Logger;
+  /** Injected in tests; defaults to the global fetch. */
+  fetch?: typeof fetch;
+  timeoutMs?: number;
+  /** Override for tests only. */
+  endpoint?: string;
+}
+
+/**
+ * Resend (https://resend.com) over its REST API, so no SDK dependency.
+ *
+ * Free plan: 100 emails/day, 3,000/month, and sending only from a domain verified in Resend.
+ * Sign-in links and invites are the only mail today, so that is plenty for a pilot. No retries
+ * here: every caller is a user action the user can repeat, and a retry loop could double-send a
+ * one-time link.
+ */
+export function resendMailer(opts: ResendOptions): Mailer {
+  const doFetch = opts.fetch ?? fetch;
+  const endpoint = opts.endpoint ?? 'https://api.resend.com/emails';
+  const timeoutMs = opts.timeoutMs ?? 10_000;
+
+  return {
+    async send(m) {
+      let res: Response;
+      try {
+        res = await doFetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${opts.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: opts.from,
+            to: [m.to],
+            subject: m.subject,
+            text: m.text,
+            tags: [{ name: 'kind', value: m.kind }],
+          }),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch (err) {
+        const reason = err instanceof Error && err.name === 'TimeoutError' ? 'timed out' : 'failed';
+        throw new MailSendError(`Resend request ${reason}`);
+      }
+
+      const body = (await res.json().catch(() => ({}))) as {
+        id?: string;
+        name?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        // Resend's error message can quote the recipient; log only status and error name.
+        throw new MailSendError(`Resend rejected the email (${res.status})`, res.status, body.name);
+      }
+      opts.logger.info({ mail: { kind: m.kind, providerId: body.id } }, 'Email sent');
+    },
+  };
+}
+
+/** Picks the transport from config. Production config refuses log/memory (see env.ts). */
+export function createMailer(env: Env, logger: Logger): Mailer {
+  switch (env.MAIL_TRANSPORT) {
+    case 'resend':
+      return resendMailer({ apiKey: env.RESEND_API_KEY!, from: env.MAIL_FROM, logger });
+    case 'memory':
+      return memoryMailer();
+    default:
+      return logMailer(logger);
+  }
 }

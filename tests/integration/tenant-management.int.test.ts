@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
-import { AuditLog, PlatformAdmin, Tenant, User } from '../../src/db/models.js';
-import { memoryMailer } from '../../src/lib/mailer.js';
+import { AuditLog, PlatformAdmin, PlatformAuditLog, Tenant, User } from '../../src/db/models.js';
+import { MailSendError, memoryMailer, type Mailer } from '../../src/lib/mailer.js';
 import { mongoTenantLookup } from '../../src/modules/tenants/tenant.lookup.js';
 import { seedDemo } from '../../src/scripts/seed.js';
 import { runInTenant } from '../../src/tenancy/context.js';
@@ -530,6 +530,68 @@ describeWithDb('tenant management, impersonation and audit log (real MongoDB)', 
       expect(
         await runInTenant(id, () => User.countDocuments({ email: 'desk@powerhouse.demo' })),
       ).toBe(1);
+    });
+  });
+  // ============================================================ retention + email failures
+  describeWithDb('audit retention', () => {
+    it('both audit collections expire entries after one year (TTL on createdAt)', async () => {
+      for (const model of [AuditLog, PlatformAuditLog]) {
+        const ttl = (await model.collection.indexes()).find(
+          (i) => i.expireAfterSeconds !== undefined,
+        );
+        expect(ttl, model.collection.collectionName).toMatchObject({
+          key: { createdAt: 1 },
+          expireAfterSeconds: 365 * 24 * 3600,
+        });
+      }
+    });
+  });
+
+  describeWithDb('when the email provider fails', () => {
+    const failing: Mailer = {
+      async send() {
+        throw new MailSendError('Resend rejected the email (500)', 500);
+      },
+    };
+    const broken = buildTestApp({
+      lookup: mongoTenantLookup,
+      mailer: failing,
+      env: { AUTH_RATE_LIMIT_MAX: '1000', RATE_LIMIT_MAX: '100000' },
+    });
+
+    it('magic-link and forgot-password still answer 202 for real and unknown accounts alike', async () => {
+      for (const [path, email] of [
+        ['/api/v1/auth/magic-link', 'arjun@member.demo'],
+        ['/api/v1/auth/magic-link', 'ghost@member.demo'],
+        ['/api/v1/auth/password/forgot', 'owner@powerhouse.demo'],
+        ['/api/v1/auth/password/forgot', 'ghost@powerhouse.demo'],
+      ] as const) {
+        const res = await request(broken).post(path).set('Host', PH).send({ email });
+        expect(res.status, `${path} ${email}`).toBe(202);
+      }
+    });
+
+    it('creating a gym still succeeds and reports the invite as not sent', async () => {
+      const token = (
+        await request(broken)
+          .post('/api/v1/auth/login')
+          .set('Host', PLATFORM)
+          .send({ identifier: 'admin@platform.demo', password: PASSWORD })
+      ).body.data.accessToken as string;
+      const res = await request(broken)
+        .post('/api/v1/platform/tenants')
+        .set('Host', PLATFORM)
+        .set('Authorization', `Bearer ${token}`)
+        .send(newGym);
+      expect(res.status).toBe(201);
+      expect(res.body.data).toMatchObject({ inviteSent: false, inviteError: 'send_failed' });
+
+      const resend = await request(broken)
+        .post(`/api/v1/platform/tenants/${res.body.data.tenant.id}/owner-invite`)
+        .set('Host', PLATFORM)
+        .set('Authorization', `Bearer ${token}`);
+      expect(resend.status).toBe(202);
+      expect(resend.body.data).toMatchObject({ sent: false, reason: 'send_failed' });
     });
   });
 });

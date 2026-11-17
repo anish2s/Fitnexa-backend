@@ -41,9 +41,20 @@ npm run admin:create:prod -- --email you@yourapp.in --name "Your Name"
 Never run `npm run seed` against production (it refuses).
 
 ## Required secrets
-`JWT_ACCESS_SECRET` (`openssl rand -base64 48`), `MONGODB_URI`. Changing `JWT_ACCESS_SECRET`
+`JWT_ACCESS_SECRET` (`openssl rand -base64 48`), `MONGODB_URI`, `RESEND_API_KEY`. Changing `JWT_ACCESS_SECRET`
 signs everyone out within 15 minutes (their refresh still works and issues new tokens).
 
-## Blocked until Milestone 9
-Production refuses to start until a real email provider is configured (`MAIL_TRANSPORT`), because
-members sign in by email link.
+## Email (Resend)
+Production refuses to start without a real email provider, because members sign in by email link.
+Provider: **Resend** (owner's choice, 2026-11-17), free plan (100 emails/day, 3,000/month).
+
+One-time setup (needs the owner, not done yet):
+1. Create a Resend account and add the sending domain (e.g. `mail.yourapp.in`).
+2. Add the DNS records Resend shows (SPF, DKIM, and a DMARC record) in Cloudflare; wait for "Verified".
+3. Create an API key with **sending access only**, scoped to that domain.
+4. Set `MAIL_TRANSPORT=resend`, `RESEND_API_KEY=re_…`, `MAIL_FROM="Gym App <no-reply@mail.yourapp.in>"`.
+
+Startup refuses `resend` without a key or with a `localhost` sender. A provider outage doesn't break
+sign-in endpoints: magic-link and forgot-password still answer `202` (the failure is logged as
+`Email could not be sent`), and gym creation reports `inviteError: "send_failed"` so the invite can
+be resent. Watch the daily quota: past 100/day Resend refuses mail until the next day.

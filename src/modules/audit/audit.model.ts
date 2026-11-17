@@ -14,6 +14,12 @@ import { tenantScopePlugin } from '../../tenancy/tenant-scope.plugin.js';
  */
 export const ACTOR_TYPES = ['user', 'platform_admin', 'system'] as const;
 
+/**
+ * Owner's decision (2026-11-17): keep audit entries for one year. MongoDB's TTL monitor removes
+ * older entries server-side, which doesn't go through (or conflict with) the append-only hooks.
+ */
+export const AUDIT_RETENTION_DAYS = 365;
+
 const changeSchema = new Schema(
   {
     field: { type: String, required: true, maxlength: 100 },
@@ -57,6 +63,9 @@ function buildAuditSchema(tenantScoped: boolean) {
   schema.index({ ...prefix, createdAt: -1 });
   schema.index({ ...prefix, action: 1, createdAt: -1 });
   schema.index({ ...prefix, 'actor.id': 1, createdAt: -1 });
+  // TTL indexes must be single-field, so this one can't start with tenantId; it is never used to
+  // query, only to expire.
+  schema.index({ createdAt: 1 }, { expireAfterSeconds: AUDIT_RETENTION_DAYS * 24 * 3600 });
 
   // Application code can add entries but never edit or remove them.
   const blocked = [

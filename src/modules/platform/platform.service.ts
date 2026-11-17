@@ -188,14 +188,16 @@ export function createPlatformService(deps: {
       },
       { tenantId },
     );
-    const inviteSent = await runInTenant(tenantId, () =>
+    const invite = await runInTenant(tenantId, () =>
       auth.sendInvite(toResolved(created), ownerId, meta),
     );
     return {
       tenant: toTenantView(created),
       appUrl: appUrl(created.slug),
       owner: { id: String(ownerId), name: owner.name, email: owner.email, status: 'invited' },
-      inviteSent,
+      inviteSent: invite.sent,
+      /** Set when the invite wasn't sent; resend it from the console. */
+      inviteError: invite.sent ? null : invite.reason,
     };
   }
 
@@ -275,14 +277,18 @@ export function createPlatformService(deps: {
         .sort({ createdAt: 1 })
         .lean();
       if (!owner) throw Errors.conflict('No owner is waiting for an invite');
-      const sent = await auth.sendInvite(toResolved(t), owner._id, meta);
-      if (sent) {
+      const invite = await auth.sendInvite(toResolved(t), owner._id, meta);
+      if (invite.sent) {
         await audit.record(ctx, {
           action: 'tenant.owner_invite',
           target: { type: 'user', id: String(owner._id) },
         });
       }
-      return { sent, ownerId: String(owner._id), throttled: !sent };
+      return {
+        sent: invite.sent,
+        ownerId: String(owner._id),
+        reason: invite.sent ? null : invite.reason,
+      };
     });
   }
 

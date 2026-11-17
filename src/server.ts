@@ -2,7 +2,7 @@ import { getEnv } from './config/env.js';
 import { connectDatabase, disconnectDatabase, isDatabaseReady } from './db/connection.js';
 import { createApp } from './app.js';
 import { createLogger } from './lib/logger.js';
-import { logMailer } from './lib/mailer.js';
+import { createMailer } from './lib/mailer.js';
 import { mongoTenantLookup } from './modules/tenants/tenant.lookup.js';
 
 async function main() {
@@ -16,8 +16,7 @@ async function main() {
     logger,
     tenantLookup: mongoTenantLookup,
     isDbReady: isDatabaseReady,
-    // Only the dev log transport exists until Milestone 9; production config refuses to boot without a real one.
-    mailer: logMailer(logger),
+    mailer: createMailer(env, logger),
   });
   const server = app.listen(env.PORT, () => logger.info({ port: env.PORT }, 'API listening'));
 

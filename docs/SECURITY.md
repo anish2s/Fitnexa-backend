@@ -86,6 +86,17 @@ Notes for the frontend (Phase 2/3):
 | Audit log append-only at the model layer; personal values (email, phone) masked in `changes` | ✅ |
 | Audit writes for ordinary actions don't fail the request; a failed write is logged with the full entry | ✅ (code) |
 | Search input escaped before use in a RegExp | ✅ |
+| Audit entries expire after 1 year (TTL index on both audit collections) | ✅ |
+
+## Email ✅ (transport) · 🟡 (live delivery)
+
+| Control | Status |
+|---|---|
+| Resend API key only from env; startup refuses `resend` without a key or with a localhost sender | ✅ |
+| Provider failures never change the response of magic-link / forgot-password (no account enumeration via 500s) | ✅ |
+| Logs carry email kind and provider id only, never recipient, link or provider error text | ✅ |
+| 10 s timeout; no automatic retry (a retry could double-send a one-time link) | ✅ |
+| Real delivery through Resend with a verified domain | 🟡 blocked: needs API key + verified domain |
 
 ## Payments ⬜ M6
 - Razorpay webhooks: HMAC-SHA256 over the **raw** body, timing-safe compare, event id de-duplicated.
@@ -116,6 +127,9 @@ Notes for the frontend (Phase 2/3):
    this transport.
 6. Members without an email address cannot use the member app. Front desk must collect an email at
    registration (Milestone 4 will make this visible in the member form).
-7. Audit log retention has no TTL yet. Needs a business decision (e.g. 1–3 years) before launch.
-8. The audit log is append-only in application code only; the MongoDB user can still modify it.
-   Production should use a DB role without update/delete on `auditLogs` if feasible on the chosen host.
+7. ~~Audit log retention~~ Decided 2026-11-17: one year, enforced by a TTL index (tested).
+8. **Accepted risk** (owner, 2026-11-17): the audit log is append-only in application code only; the
+   MongoDB user can still modify it. No separate DB role for now.
+9. Resend free plan caps mail at 100/day. A burst of sign-in links past that is refused until the
+   next day; members would see no email. Monitor `Email could not be sent` in the logs; upgrade the
+   plan before onboarding more than a few gyms.

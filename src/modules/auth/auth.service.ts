@@ -6,7 +6,7 @@ import { dummyHash, hashPassword, needsRehash, verifyPassword } from '../../auth
 import { hashToken, isWellFormedToken, randomToken } from '../../auth/tokens.js';
 import { Errors } from '../../lib/errors.js';
 import type { Logger } from '../../lib/logger.js';
-import type { Mailer } from '../../lib/mailer.js';
+import type { MailMessage, Mailer } from '../../lib/mailer.js';
 import { normalizePhone } from '../../lib/phone.js';
 import type { ResolvedTenant } from '../../tenancy/resolver.middleware.js';
 import type { AuditContext, AuditService } from '../audit/audit.service.js';
@@ -29,6 +29,9 @@ export interface ClientMeta {
   userAgent?: string;
   requestId?: string;
 }
+
+export type InviteResult =
+  { sent: true } | { sent: false; reason: 'no_email' | 'throttled' | 'send_failed' };
 
 export interface IssuedSession {
   accessToken: string;
@@ -71,6 +74,21 @@ export function createAuthService(deps: {
       userAgent: clip(meta.userAgent, 300),
       requestId: clip(meta.requestId, 64),
     };
+  }
+
+  /**
+   * Sends and reports success instead of throwing. Magic-link and forgot-password must answer 202
+   * whether or not the account exists; if a provider failure became a 500 only for real accounts,
+   * the endpoints would reveal who is registered. The failure is logged for the operator instead.
+   */
+  async function safeSend(message: MailMessage): Promise<boolean> {
+    try {
+      await mailer.send(message);
+      return true;
+    } catch (err) {
+      logger.error({ err, mail: { kind: message.kind } }, 'Email could not be sent');
+      return false;
+    }
   }
 
   // ---------------------------------------------------------------- sessions
@@ -321,7 +339,7 @@ export function createAuthService(deps: {
     );
     if (!token) return;
     const link = appUrl(tenant, `/login/verify?token=${token}`);
-    await mailer.send({
+    await safeSend({
       kind: 'magic_link',
       to: user.email!,
       subject: `Your sign-in link for ${tenant.name}`,
@@ -358,7 +376,7 @@ export function createAuthService(deps: {
       meta,
     );
     if (!token) return;
-    await mailer.send({
+    await safeSend({
       kind: 'password_reset',
       to: user.email!,
       subject: `Reset your ${tenant.name} password`,
@@ -369,10 +387,17 @@ export function createAuthService(deps: {
     });
   }
 
-  /** Sends an invite so a new owner/staff member can set their first password (used from M3/M4). */
-  async function sendInvite(tenant: ResolvedTenant, userId: Types.ObjectId, meta: ClientMeta = {}) {
+  /**
+   * Sends an invite so a new owner/staff member can set their first password (used from M3/M4).
+   * Returns why it wasn't sent, so the console can say "try again later" vs "email failed".
+   */
+  async function sendInvite(
+    tenant: ResolvedTenant,
+    userId: Types.ObjectId,
+    meta: ClientMeta = {},
+  ): Promise<InviteResult> {
     const user = await User.findOne({ _id: userId, role: { $in: ['owner', 'staff'] } }).lean();
-    if (!user?.email) return false;
+    if (!user?.email) return { sent: false, reason: 'no_email' };
     const token = await issueLink(
       tenant,
       'invite',
@@ -380,8 +405,8 @@ export function createAuthService(deps: {
       env.INVITE_TTL_HOURS * 3_600_000,
       meta,
     );
-    if (!token) return false;
-    await mailer.send({
+    if (!token) return { sent: false, reason: 'throttled' };
+    const sent = await safeSend({
       kind: 'invite',
       to: user.email,
       subject: `You've been invited to ${tenant.name}`,
@@ -389,7 +414,7 @@ export function createAuthService(deps: {
         `Hi ${user.name},\n\nYou've been given access to ${tenant.name}. Set your password here ` +
         `(valid for ${env.INVITE_TTL_HOURS} hours):\n\n${appUrl(tenant, `/reset-password?token=${token}`)}`,
     });
-    return true;
+    return sent ? { sent: true } : { sent: false, reason: 'send_failed' };
   }
 
   /** Completes a password reset OR an invite. All existing sessions are revoked. */

@@ -82,9 +82,11 @@ export const envSchema = z
       .refine((v) => v.includes('{slug}'), 'GYM_APP_URL_TEMPLATE must contain {slug}'),
 
     // --- Email ---
-    /** log: writes emails to the log (dev only). memory: kept in memory (tests). */
-    MAIL_TRANSPORT: z.enum(['log', 'memory']).default('log'),
-    MAIL_FROM: z.string().default('Gym App <no-reply@localhost>'),
+    /** log: writes emails to the log (dev only). memory: kept in memory (tests). resend: real. */
+    MAIL_TRANSPORT: z.enum(['log', 'memory', 'resend']).default('log'),
+    /** Must be an address on a domain verified in the provider, e.g. `Gym App <no-reply@yourapp.in>`. */
+    MAIL_FROM: z.string().trim().min(3).default('Gym App <no-reply@localhost>'),
+    RESEND_API_KEY: z.string().trim().optional(),
   })
   .transform((env) => ({
     ...env,
@@ -102,8 +104,24 @@ export const envSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['MAIL_TRANSPORT'],
-        message:
-          'A real email provider is required in production (added in Milestone 9); log/memory are dev-only',
+        message: 'A real email provider (MAIL_TRANSPORT=resend) is required in production',
+      });
+    }
+    if (
+      env.MAIL_TRANSPORT === 'resend' &&
+      !/^re_[A-Za-z0-9_]{8,}$/.test(env.RESEND_API_KEY ?? '')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['RESEND_API_KEY'],
+        message: 'MAIL_TRANSPORT=resend needs RESEND_API_KEY (starts with re_)',
+      });
+    }
+    if (env.MAIL_TRANSPORT === 'resend' && /@localhost\b/i.test(env.MAIL_FROM)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_FROM'],
+        message: 'MAIL_FROM must use a domain verified in Resend',
       });
     }
     if (env.NODE_ENV === 'production' && !env.GYM_APP_URL_TEMPLATE.startsWith('https://')) {

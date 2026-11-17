@@ -110,8 +110,9 @@ text-ish search via `{ tenantId, nameLower }` prefix index (Atlas Search later i
 `impersonator { id, name }`, `target { type, id }`, `changes[{ field, from, to }]` (email/phone values
 masked), `metadata`, `ip`, `userAgent`, `requestId`, `createdAt`.
 Indexes (prefixed with `tenantId` on the scoped collection): `{ createdAt: -1 }`,
-`{ action, createdAt: -1 }`, `{ actor.id, createdAt: -1 }`. No TTL yet: retention period is an open
-decision (see SECURITY.md).
+`{ action, createdAt: -1 }`, `{ actor.id, createdAt: -1 }`.
+Retention: **1 year** (owner's decision 2026-11-17), via a TTL index `{ createdAt: 1 }` with
+`expireAfterSeconds: 31536000` on both collections. Run `npm run db:indexes` on existing databases.
 
 ### plans ⬜ M5 · memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · counters ⬜ M6 · jobLocks / notifications ⬜ M9
 

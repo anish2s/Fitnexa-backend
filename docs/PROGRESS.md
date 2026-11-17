@@ -11,8 +11,10 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
 - [x] **Member login** (2026-11-13): **email sign-in link** (owner's choice). Consequences:
   - Members without an email can't use the member app; front desk must capture emails (M4 form will flag it).
-  - A real email provider is needed **before the pilot**, not at M9. Proposed: pull the provider
-    integration forward into M4. Needs your choice of provider and a verified sending domain.
+  - A real email provider is needed **before the pilot**, not at M9: pulled forward into M4.
+- [x] **Email provider** (2026-11-17): **Resend**, free plan (100/day, 3,000/month).
+- [x] **Audit log retention** (2026-11-17): **1 year** (TTL index).
+- [x] **Audit log DB permissions** (2026-11-17): app-level append-only is enough for now (accepted risk).
 
 ## Phase 1 milestones
 
@@ -54,7 +56,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] 172 tests passing on real MongoDB (29 new M3 integration tests incl. cross-tenant and role checks); typecheck, lint, build
 
 ### M4 — Staff & member management
-- [ ] **Real email provider** (moved up from M9: members can't sign in without it)
+- [~] **Real email provider: Resend** (moved up from M9). Transport, config validation, failure handling done and tested with a fake API; **blocked** on live delivery until a Resend API key and verified sending domain exist (see DEPLOYMENT.md)
 - [ ] Staff CRUD, deactivate, permission overrides
 - [ ] Members CRUD, archive, search, pagination, profile
 - [ ] Cloudinary signed uploads (logo, member photo)
@@ -106,3 +108,6 @@ depend on the backend.
   with curl (owner login, cross-gym token rejected, refresh, member email link, super admin).
   M3 built: gym management console API, owner settings, audit log, audited impersonation.
   172 tests passing (29 new). Not yet smoke-tested against the compiled server.
+- **2026-11-17** — Owner decisions: Resend, 1-year audit retention, app-level append-only accepted.
+  Added 1-year TTL on audit logs, Resend transport, and fixed a latent account-enumeration path
+  (provider errors would have turned 202 into 500 only for registered emails). 181 tests passing.
