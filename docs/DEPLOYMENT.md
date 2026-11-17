@@ -41,7 +41,9 @@ npm run admin:create:prod -- --email you@yourapp.in --name "Your Name"
 Never run `npm run seed` against production (it refuses).
 
 ## Required secrets
-`JWT_ACCESS_SECRET` (`openssl rand -base64 48`), `MONGODB_URI`, `RESEND_API_KEY`. Changing `JWT_ACCESS_SECRET`
+`JWT_ACCESS_SECRET` (`openssl rand -base64 48`), `MONGODB_URI`, `RESEND_API_KEY`.
+Optional: `QR_SIGNING_SECRET` (attendance passes; derived from the JWT secret if unset),
+`PAYMENTS_ENCRYPTION_KEY`, Cloudinary keys. Changing `JWT_ACCESS_SECRET`
 signs everyone out within 15 minutes (their refresh still works and issues new tokens).
 
 ## Image uploads (Cloudinary)

@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–6 complete and verified against a real MongoDB 8.0 (live email, image upload and Razorpay round trip need credentials). Milestone 7 next.**
+**Phase 1 — Backend. Milestones 1–7 complete and verified against a real MongoDB 8.0 (live email, image upload and Razorpay round trip need credentials). Milestone 8 next.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -78,9 +78,9 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [~] Live Razorpay round trip with real test keys: **needs a Razorpay test account**
 - [x] Transactions for payment + membership + counter
 
-### M7 — Attendance
-- [ ] Rotating signed QR pass; staff scan endpoint; manual check-in
-- [ ] Duplicate prevention; history; daily report
+### M7 — Attendance ✅
+- [x] Rotating signed QR pass (per-gym key, 30 s windows, ~60–90 s validity); staff scan; manual check-in; admission needs an active membership (clear reason otherwise); desk sees photo + dues
+- [x] Duplicate prevention (unique per member per day; parallel scans → 1); gym-wide day list, member history, member's own history; daily report (QR/manual, busy hours, attendance rate); 14 tests + 7/7 compiled-server smoke
 
 ### M8 — Dashboard statistics & reports
 - [ ] KPIs: total/active/new members, revenue (month), today's attendance, pending renewals
@@ -137,3 +137,5 @@ depend on the backend.
   Compiled-server smoke test 14/14: dues, desk payment, idempotent retry, overpay refused, PDF
   receipt, refund permissions, refund numbering, totals, Razorpay key connect (live refused), signed
   vs forged webhook (raw-body HMAC), cross-gym read, no secrets in logs.
+- **2026-11-17** — M7 attendance: rotating QR pass, scan/manual check-in, one visit per day, history,
+  daily report. 327 tests passing; compiled-server smoke 7/7.

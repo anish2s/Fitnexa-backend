@@ -2,8 +2,25 @@ import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import mongoose, { Types } from 'mongoose';
 import { hashPassword } from '../auth/password.js';
-import { Member, Membership, Payment, Plan, PlatformAdmin, Tenant, User } from '../db/models.js';
-import { addDays, financialYear, parseDateOnly, periodEnd, todayIn } from '../lib/dates.js';
+import {
+  Attendance,
+  Member,
+  Membership,
+  Payment,
+  Plan,
+  PlatformAdmin,
+  Tenant,
+  User,
+} from '../db/models.js';
+import {
+  addDays,
+  financialYear,
+  formatDateOnly,
+  parseDateOnly,
+  periodEnd,
+  startOfDayIn,
+  todayIn,
+} from '../lib/dates.js';
 import { PLAN_DURATIONS, type PlanDuration } from '../modules/plans/plan.model.js';
 import { priceBreakdown } from '../lib/money.js';
 import { nextSequence } from '../modules/counters/counter.model.js';
@@ -39,6 +56,8 @@ interface DemoGym {
       startedDaysAgo: number;
       /** Paid so far: 'full', a rupee amount, or nothing (unpaid). */
       paid?: 'full' | number;
+      /** Check-ins, as days before today (0 = today), at 7 am gym time. */
+      visits?: number[];
       method?: 'cash' | 'upi';
     };
   }[];
@@ -68,7 +87,7 @@ export const DEMO_GYMS: DemoGym[] = [
         name: 'Arjun Sharma',
         email: 'arjun@member.demo',
         phone: '+919811111111',
-        membership: { plan: 'Monthly', startedDaysAgo: 25, paid: 500, method: 'cash' },
+        membership: { plan: 'Monthly', startedDaysAgo: 25, paid: 500, method: 'cash', visits: [1] },
       },
       // Quarterly, started 100 days ago: expired about 10 days ago.
       {
@@ -82,7 +101,13 @@ export const DEMO_GYMS: DemoGym[] = [
         name: 'Vikram Singh',
         email: 'vikram@member.demo',
         phone: '+919811111113',
-        membership: { plan: 'Annual', startedDaysAgo: 30, paid: 'full', method: 'cash' },
+        membership: {
+          plan: 'Annual',
+          startedDaysAgo: 30,
+          paid: 'full',
+          method: 'cash',
+          visits: [0, 1, 2],
+        },
       },
       // No email: managed by the front desk, no member-app access.
       { name: 'Suresh Kumar', phone: '+919833333331' },
@@ -101,7 +126,13 @@ export const DEMO_GYMS: DemoGym[] = [
         name: 'Arjun Sharma',
         email: 'arjun@member.demo',
         phone: '+919811111111',
-        membership: { plan: 'Quarterly', startedDaysAgo: 10, paid: 'full', method: 'upi' },
+        membership: {
+          plan: 'Quarterly',
+          startedDaysAgo: 10,
+          paid: 'full',
+          method: 'upi',
+          visits: [0],
+        },
       },
       { name: 'Meera Iyer', email: 'meera@member.demo', phone: '+919822222222' },
       { name: 'Rohan Das', email: 'rohan@member.demo', phone: '+919822222223' },
@@ -214,6 +245,17 @@ export async function seedDemo(
             kind: 'new',
             paidPaise,
           });
+          for (const daysAgo of sold.visits ?? []) {
+            const day = formatDateOnly(addDays(today, -daysAgo))!;
+            await Attendance.create({
+              memberId,
+              membershipId: membership._id,
+              day,
+              hour: 7,
+              checkedInAt: new Date(startOfDayIn(day, 'Asia/Kolkata').getTime() + 7 * 3_600_000),
+              method: 'qr',
+            });
+          }
           if (paidPaise) {
             // Same numbering as the payments API: per gym, per financial year.
             const receivedAt = new Date(startDate.getTime() + 11 * 3_600_000);

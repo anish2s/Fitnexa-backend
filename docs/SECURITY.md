@@ -138,9 +138,17 @@ Notes for the frontend (Phase 2/3):
 | Tests can't reach Razorpay: the test app's default client throws; a fake is injected where needed | ✅ |
 | Live Razorpay round trip (test keys) | 🟡 needs a Razorpay test account |
 
-## Attendance QR ⬜ M7
-- Member pass = `HMAC(tenantId|memberId|window)` with 30–60 s rotating windows; server accepts current ±1
-  window; a token is single-use per day. Screenshots expire.
+## Attendance QR ✅ M7
+
+| Control | Status |
+|---|---|
+| Pass = `gp1.<memberId>.<window>.<sig>`, sig = HMAC-SHA256 (truncated 128 bit) with a **per-gym key** (HKDF of the server secret, salt = gym id): a pass from one gym fails at another | ✅ |
+| 30 s windows; scanner accepts 2 back / 1 ahead (≈60–90 s): screenshots expire; moving the window breaks the signature | ✅ |
+| Signature checked before the time window, constant-time compare | ✅ |
+| One check-in per member per gym day (unique index); parallel scans → one row; replays inside the window are no-ops | ✅ |
+| Admission needs an active membership today (gym time zone); archived members refused | ✅ |
+| Only staff (`attendance:checkin`) can check in; members can't check themselves in | ✅ |
+| `QR_SIGNING_SECRET` optional; default is derived from `JWT_ACCESS_SECRET` with domain separation (never the JWT key itself) | ✅ |
 
 ## Privacy (DPDP Act 2023) ⬜ M9
 - Collect the minimum: DOB/gender optional; no ID documents stored. ✅ M4
@@ -178,3 +186,6 @@ Notes for the frontend (Phase 2/3):
 13. Razorpay orders are created for the balance at that moment. If the desk collects cash before the
     member completes online payment, both are recorded and the membership shows `overpaid`; the owner
     refunds the excess. Auto-refund was not built (money decisions stay with the owner).
+14. A pass shared within its ~60–90 s life could let a friend in if the member hasn't checked in that
+    day yet. The desk sees the member's photo on every scan to catch this; adding photos (Cloudinary)
+    makes the check real.

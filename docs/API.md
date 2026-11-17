@@ -31,6 +31,8 @@ Every response carries `X-Request-Id`.
 | 409 | `PAYMENT_GATEWAY_NOT_CONNECTED` | this gym hasn't connected Razorpay |
 | 502 | `PAYMENT_GATEWAY_ERROR` | Razorpay refused or couldn't be reached |
 | 400 | `INVALID_SIGNATURE` | checkout or webhook signature didn't verify |
+| 400 | `PASS_INVALID`, `PASS_EXPIRED` | attendance QR not for this gym / too old |
+| 409 | `NO_ACTIVE_MEMBERSHIP` | check-in without a membership active today |
 | 422 | `VALIDATION_ERROR` | `details: [{ path, message }]` |
 | 422 | `IMPORT_INVALID` | CSV import had bad rows; `details` = row report; nothing written |
 | 429 | `RATE_LIMITED`, `LOGIN_LOCKED` | |
@@ -365,6 +367,31 @@ Checkout params: `{ keyId, orderId, amountPaise, currency: "INR", name, descript
 - **Refunds** of online payments (`POST /payments/:id/refunds`) go through Razorpay to the original
   method: recorded first as `pending`, then `processed` (or reverted as `failed` if Razorpay refuses →
   `502 PAYMENT_GATEWAY_ERROR`, or later via the `refund.failed` webhook).
+
+## Attendance (gym host)
+
+| Method & path | Who | Body / query | Result |
+|---|---|---|---|
+| `GET /members/me/pass` | member (`self:read`) | — | `{ token, refreshAt, validUntil, member{ name, memberCode, photoUrl }, membershipStatus, checkedInToday }` |
+| `POST /attendance/scan` | `attendance:checkin` (owner, staff) | `{ token }` from the member's QR | check-in result |
+| `POST /attendance/manual` | `attendance:checkin` | `{ memberId }` | check-in result |
+| `GET /attendance` | `attendance:read` | `?date` (default today) `&page&limit` | that day's check-ins with `member`, newest first; `meta.date` |
+| `GET /attendance/report` | `attendance:read` | `?date` | `{ date, total, byMethod{ qr, manual }, byHour[24]{ hour, count }, busiestHour, activeMembers, attendanceRate }` |
+| `GET /members/:id/attendance` | `attendance:read` | `?from&to&page&limit` | that member's visits, newest first |
+| `GET /members/me/attendance` | member (`self:read`) | same | own visits |
+
+Check-in result: `201 { status: "checked_in", … }` or `200 { status: "already_checked_in", … }`, with
+`checkIn{ id, day, checkedInAt, method }`, `member{ id, name, memberCode, phone, photoUrl }` and
+`membership{ id, plan, endDate, daysLeft, balancePaise, paymentStatus }`. Show the photo and any balance
+due to the desk.
+
+- **QR pass**: render `token` as a QR code; fetch a new one at `refreshAt` (every 30 s). A scanned
+  token is accepted for about 60–90 s. Errors: `400 PASS_EXPIRED` (ask the member to refresh),
+  `400 PASS_INVALID` (not a pass for this gym).
+- **One check-in per member per day** (gym time zone). Repeats return `already_checked_in`, never an error.
+- **Admission** needs a membership active today, otherwise `409 NO_ACTIVE_MEMBERSHIP` with
+  `details{ reason: expired|upcoming|none, date }` and a message like "Membership expired on 2026-11-10".
+- `attendanceRate` = check-ins ÷ members with an active membership that day (0–1).
 
 ## Image uploads — `/api/v1/uploads` (gym host)
 

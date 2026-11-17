@@ -10,6 +10,8 @@ import { createImageStore, type ImageStore } from './lib/image-store.js';
 import type { Mailer } from './lib/mailer.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
+import { attendanceRouters } from './modules/attendance/attendance.routes.js';
+import { createPassSigner, qrMasterSecret } from './modules/attendance/qr-pass.js';
 import { auditRouter } from './modules/audit/audit.routes.js';
 import { createAuditService } from './modules/audit/audit.service.js';
 import { authRouter } from './modules/auth/auth.routes.js';
@@ -140,6 +142,9 @@ export function createApp(deps: AppDeps) {
   const gw = gatewayRouters({ jwt, gateway });
   const pay = paymentRouters({ jwt, audit, gateway });
   v1.use('/members', ms.perMember);
+  const att = attendanceRouters({ jwt, passes: createPassSigner(qrMasterSecret(env)) });
+  v1.use('/members', att.perMember);
+  v1.use('/attendance', att.attendance);
   v1.use('/members', pay.perMember);
   v1.use('/members', gw.memberOrders);
   v1.use('/members', memberRouter({ jwt, audit, images }));

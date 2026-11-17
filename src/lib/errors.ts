@@ -46,6 +46,14 @@ export const Errors = {
   gatewayError: (message: string) => new AppError(502, 'PAYMENT_GATEWAY_ERROR', message),
   invalidSignature: () =>
     new AppError(400, 'INVALID_SIGNATURE', 'Payment signature could not be verified'),
+  passInvalid: () =>
+    new AppError(400, 'PASS_INVALID', 'This QR code is not a valid member pass for this gym'),
+  passExpired: () =>
+    new AppError(
+      400,
+      'PASS_EXPIRED',
+      'This QR code has expired. Ask the member to refresh the pass.',
+    ),
   uploadsNotConfigured: () =>
     new AppError(503, 'UPLOADS_NOT_CONFIGURED', 'Image uploads are not configured yet'),
   tenantRequired: () =>

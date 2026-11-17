@@ -88,6 +88,16 @@ export const envSchema = z
     MAIL_FROM: z.string().trim().min(3).default('Gym App <no-reply@localhost>'),
     RESEND_API_KEY: z.string().trim().optional(),
 
+    // --- Attendance QR ---
+    /**
+     * Signs members' rotating QR passes (per-gym keys are derived from it). Optional: defaults to a
+     * key derived from JWT_ACCESS_SECRET, so rotating that also invalidates passes (they live ~1 min).
+     */
+    QR_SIGNING_SECRET: z
+      .string()
+      .min(32, 'QR_SIGNING_SECRET must be at least 32 characters')
+      .optional(),
+
     // --- Online payments (Razorpay, each gym's own account) ---
     /**
      * 32 random bytes, base64 (`openssl rand -base64 32`). Encrypts gyms' Razorpay secrets at rest.
