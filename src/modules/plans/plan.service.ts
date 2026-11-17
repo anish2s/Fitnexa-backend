@@ -5,14 +5,15 @@ import { pageMeta, skipFor } from '../../lib/pagination.js';
 import { requireTenantId } from '../../tenancy/context.js';
 import { diffChanges, type AuditContext, type AuditService } from '../audit/audit.service.js';
 import { Tenant } from '../tenants/tenant.model.js';
-import { Plan } from './plan.model.js';
+import { PLAN_DURATIONS, Plan, type PlanDuration } from './plan.model.js';
 import type { CreatePlanInput, PlanListQuery, UpdatePlanInput } from './plan.schemas.js';
 
 export type LeanPlan = {
   _id: Types.ObjectId;
   name: string;
   description?: string | null;
-  durationDays: number;
+  duration: PlanDuration;
+  months: number;
   pricePaise: number;
   taxMode: TaxMode;
   gstRate: number;
@@ -26,7 +27,8 @@ export function toPlanView(p: LeanPlan) {
     id: String(p._id),
     name: p.name,
     description: p.description ?? null,
-    durationDays: p.durationDays,
+    duration: p.duration,
+    months: p.months,
     pricePaise: p.pricePaise,
     taxMode: p.taxMode,
     gstRate: p.gstRate,
@@ -70,7 +72,7 @@ export function createPlanService(deps: { audit: AuditService }) {
     const filter = { archivedAt: q.archived ? { $ne: null } : null };
     const [rows, total] = await Promise.all([
       Plan.find(filter)
-        .sort({ durationDays: 1, pricePaise: 1, _id: 1 })
+        .sort({ months: 1, pricePaise: 1, _id: 1 })
         .skip(skipFor(q))
         .limit(q.limit)
         .lean<LeanPlan[]>(),
@@ -86,7 +88,8 @@ export function createPlanService(deps: { audit: AuditService }) {
       name: input.name,
       nameKey: input.name.toLowerCase(),
       description: input.description,
-      durationDays: input.durationDays,
+      duration: input.duration,
+      months: PLAN_DURATIONS[input.duration as PlanDuration],
       pricePaise: input.pricePaise,
       ...tax,
     });
@@ -95,7 +98,7 @@ export function createPlanService(deps: { audit: AuditService }) {
     await audit.record(ctx, {
       action: 'plan.create',
       target: { type: 'plan', id: String(plan._id) },
-      metadata: { name: plan.name, pricePaise: plan.pricePaise, durationDays: plan.durationDays },
+      metadata: { name: plan.name, pricePaise: plan.pricePaise, duration: plan.duration },
     });
     return toPlanView(plan);
   }
@@ -110,8 +113,11 @@ export function createPlanService(deps: { audit: AuditService }) {
       Object.assign(set, { name: input.name, nameKey: input.name.toLowerCase() });
     if (input.description === null) unset.description = 1;
     else if (input.description !== undefined) set.description = input.description;
-    for (const k of ['durationDays', 'pricePaise'] as const)
-      if (input[k] !== undefined) set[k] = input[k];
+    if (input.pricePaise !== undefined) set.pricePaise = input.pricePaise;
+    if (input.duration !== undefined) {
+      set.duration = input.duration;
+      set.months = PLAN_DURATIONS[input.duration as PlanDuration];
+    }
     if (input.taxMode !== undefined || input.gstRate !== undefined) {
       Object.assign(
         set,
@@ -129,7 +135,7 @@ export function createPlanService(deps: { audit: AuditService }) {
     const changes = diffChanges(before, after, [
       'name',
       'description',
-      'durationDays',
+      'duration',
       'pricePaise',
       'taxMode',
       'gstRate',

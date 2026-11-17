@@ -241,16 +241,17 @@ Reading needs `plans:read` (owner, staff); changes need `plans:manage` (owner; g
 |---|---|---|
 | `GET /plans` | `?archived=true|false&page&limit` | plans, shortest first |
 | `GET /plans/:id` | — | plan |
-| `POST /plans` | `{ name, durationDays (1–1095), pricePaise, description?, taxMode?, gstRate? }` | `201` plan |
+| `POST /plans` | `{ name, duration: monthly|quarterly|half_yearly|yearly, pricePaise, description?, taxMode?, gstRate? }` | `201` plan |
 | `PATCH /plans/:id` | any of the above (`description: null` clears) | plan. `409` if archived. |
 | `POST /plans/:id/archive` · `/restore` | — | plan. Archived plans can't be sold; restoring can clash on name (`409`). |
 
-Plan: `{ id, name, description, durationDays, pricePaise, taxMode: inclusive|exclusive|none, gstRate: 0|5|12|18|28, breakdown{ basePaise, gstPaise, totalPaise }, archivedAt, createdAt, updatedAt }`.
+Plan: `{ id, name, description, duration, months (1|3|6|12), pricePaise, taxMode: inclusive|exclusive|none, gstRate: 0|5|12|18|28, breakdown{ basePaise, gstPaise, totalPaise }, archivedAt, createdAt, updatedAt }`.
 
 - `inclusive`: price contains GST (₹1,500 at 18% = ₹1,271.19 + ₹228.81). `exclusive`: GST is added on
   top. `none`: no GST.
 - Default: `inclusive` at 18% if the gym has a GSTIN in settings, otherwise `none`. A gym without a
   GSTIN can't create GST plans (`422`).
+- Lengths (owner's decision): `monthly` (1 month), `quarterly` (3), `half_yearly` (6), `yearly` (12).
 - Live plan names are unique per gym, ignoring case.
 - Editing a plan changes future sales only; memberships keep the price they were sold at.
 
@@ -268,13 +269,16 @@ Reading needs `memberships:read`, selling/renewing/cancelling `memberships:manag
 | `GET /memberships/expiring` | `?days&page&limit` | active memberships ending within `days` (default: gym's `renewalReminderDays`), whose member hasn't renewed and isn't archived. `meta.until`. |
 | `GET /members/me/memberships` | `self:read` (member) | own `{ summary, items[] }`, without notes/staff fields |
 
-Membership: `{ id, memberId, plan{ id, name, durationDays, pricePaise, taxMode, gstRate }, discountPaise,
+Membership: `{ id, memberId, plan{ id, name, duration, months, pricePaise, taxMode, gstRate }, discountPaise,
 basePaise, gstPaise, totalPaise, startDate, endDate, kind: new|renewal, status, daysLeft, cancelledAt,
 cancelReason, notes, soldBy, previousMembershipId, createdAt }`.
 
 - **Status is derived** from the dates against today in the gym's time zone: `upcoming` (starts
   later), `active`, `expired`, or `cancelled`. `daysLeft` counts today for active ones.
-- `startDate`/`endDate` are `YYYY-MM-DD`, both inclusive: a 30-day plan from 1 Mar ends 30 Mar.
+- `startDate`/`endDate` are `YYYY-MM-DD`, both inclusive. Lengths are **calendar months**: the
+  membership ends the day before the same date N months later (monthly from 15 Jan → 14 Feb;
+  quarterly from 10 Apr → 9 Jul). If that date doesn't exist it runs to the month's end (monthly from
+  31 Jan → 28/29 Feb). Renewals from expiry follow on with no gap (next one starts 1 Mar).
 - The plan's price and tax are **copied at sale**; editing the plan later changes nothing sold.
 - Discount (paise) comes off the price before GST; it can't exceed the price.
 - **No overlaps**: `409 CONFLICT` with `details{ endDate, availableFrom }` of the clashing membership.

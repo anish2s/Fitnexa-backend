@@ -1,19 +1,32 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { AuditLog, Member, Membership, Plan, User } from '../../src/db/models.js';
-import { addDays, formatDateOnly, parseDateOnly, todayIn } from '../../src/lib/dates.js';
+import {
+  addDays,
+  daysBetween,
+  formatDateOnly,
+  parseDateOnly,
+  periodEnd,
+  todayIn,
+} from '../../src/lib/dates.js';
 import { runInTenant } from '../../src/tenancy/context.js';
 import { connectTestDb, describeWithDb, dropAndDisconnect } from '../helpers/db.js';
 import { FZ, PH, gymId, intApp, resetDemo } from '../helpers/int.js';
 
 const { mailer, call, tokenFor, memberToken } = intApp();
 
-const ARJUN = '+919811111111'; // Monthly, ends in 4 days
-const PRIYA = '+919811111112'; // Quarterly, expired 11 days ago
+const ARJUN = '+919811111111'; // Monthly, started 25 days ago: ends in a few days
+const PRIYA = '+919811111112'; // Quarterly, started 100 days ago: expired
 const VIKRAM = '+919811111113'; // Annual, started 30 days ago
 const SURESH = '+919833333331'; // no membership, no email
 
 const today = () => parseDateOnly(todayIn('Asia/Kolkata'))!;
 const day = (offset: number) => formatDateOnly(addDays(today(), offset))!;
+const iso = (d: Date) => formatDateOnly(d)!;
+/** Days left counting today, as the API reports for active memberships. */
+const left = (end: Date) => daysBetween(today(), end) + 1;
+// The seed's memberships, worked out the same way the seed does (periodEnd is unit-tested).
+const arjunEnd = () => periodEnd(addDays(today(), -25), 1);
+const priyaEnd = () => periodEnd(addDays(today(), -100), 3);
 
 async function memberId(slug: string, phone: string) {
   return runInTenant(await gymId(slug), async () =>
@@ -56,11 +69,12 @@ describeWithDb('memberships (real MongoDB)', () => {
       kind: 'new',
       status: 'active',
       startDate: day(0),
-      endDate: day(29),
-      daysLeft: 30,
+      endDate: iso(periodEnd(today(), 1)),
+      daysLeft: left(periodEnd(today(), 1)),
       plan: {
         name: 'Monthly',
-        durationDays: 30,
+        duration: 'monthly',
+        months: 1,
         pricePaise: 150000,
         taxMode: 'inclusive',
         gstRate: 18,
@@ -99,8 +113,13 @@ describeWithDb('memberships (real MongoDB)', () => {
     const arjun = await memberId('powerhouse', ARJUN);
     const res = await sell(arjun, { planId: monthly });
     expect(res.status).toBe(409);
-    expect(res.body.error.details).toMatchObject({ endDate: day(4), availableFrom: day(5) });
-    expect((await sell(arjun, { planId: monthly, startDate: day(5) })).status).toBe(201);
+    expect(res.body.error.details).toMatchObject({
+      endDate: iso(arjunEnd()),
+      availableFrom: iso(addDays(arjunEnd(), 1)),
+    });
+    expect(
+      (await sell(arjun, { planId: monthly, startDate: iso(addDays(arjunEnd(), 1)) })).status,
+    ).toBe(201);
   });
 
   it('parallel sales for one member: exactly one wins', async () => {
@@ -142,16 +161,19 @@ describeWithDb('memberships (real MongoDB)', () => {
     expect(res.body.data).toMatchObject({
       kind: 'renewal',
       status: 'upcoming',
-      startDate: day(5),
-      endDate: day(34),
-      daysLeft: 5,
+      startDate: iso(addDays(arjunEnd(), 1)),
+      endDate: iso(periodEnd(addDays(arjunEnd(), 1), 1)),
+      daysLeft: left(arjunEnd()),
       plan: { name: 'Monthly' },
     });
     expect(res.body.data.previousMembershipId).toBeTruthy();
 
     const detail = await call('get', PH, `/members/${arjun}`, desk);
-    expect(detail.body.data.membership).toMatchObject({ status: 'active', nextStartDate: day(5) });
-    expect(detail.body.data.membership.current.endDate).toBe(day(4));
+    expect(detail.body.data.membership).toMatchObject({
+      status: 'active',
+      nextStartDate: iso(addDays(arjunEnd(), 1)),
+    });
+    expect(detail.body.data.membership.current.endDate).toBe(iso(arjunEnd()));
   });
 
   it('renewing a lapsed member starts today by default, or back-dated from expiry if asked', async () => {
@@ -164,11 +186,11 @@ describeWithDb('memberships (real MongoDB)', () => {
       reason: 'redo',
     });
     const fromExpiry = await renew(priya, { startFrom: 'expiry', planId: quarterly });
-    // Expired 11 days ago → the new period started 10 days ago; the lapse isn't free.
+    // Starts the day after the old one ended (in the past): the lapse isn't free.
     expect(fromExpiry.body.data).toMatchObject({
-      startDate: day(-10),
-      endDate: day(79),
-      daysLeft: 80,
+      startDate: iso(addDays(priyaEnd(), 1)),
+      endDate: iso(periodEnd(addDays(priyaEnd(), 1), 3)),
+      daysLeft: left(periodEnd(addDays(priyaEnd(), 1), 3)),
     });
   });
 
@@ -231,11 +253,20 @@ describeWithDb('memberships (real MongoDB)', () => {
     expect(exp.status).toBe(200);
     expect(exp.body.meta).toMatchObject({ days: 7, until: day(7), total: 1 });
     expect(exp.body.data[0]).toMatchObject({
-      endDate: day(4),
-      daysLeft: 5,
+      endDate: iso(arjunEnd()),
+      daysLeft: left(arjunEnd()),
       member: { name: 'Arjun Sharma' },
     });
-    expect((await call('get', PH, '/memberships/expiring?days=3', desk)).body.meta.total).toBe(0);
+    expect(
+      (
+        await call(
+          'get',
+          PH,
+          `/memberships/expiring?days=${daysBetween(today(), arjunEnd()) - 1}`,
+          desk,
+        )
+      ).body.meta.total,
+    ).toBe(0);
     expect((await call('get', PH, '/memberships/expiring?days=90', desk)).body.meta.total).toBe(1);
 
     const arjun = await memberId('powerhouse', ARJUN);
@@ -257,7 +288,10 @@ describeWithDb('memberships (real MongoDB)', () => {
     const me = await memberToken(PH, 'arjun@member.demo');
     const res = await call('get', PH, '/members/me/memberships', me);
     expect(res.status).toBe(200);
-    expect(res.body.data.summary).toMatchObject({ status: 'active', nextStartDate: day(5) });
+    expect(res.body.data.summary).toMatchObject({
+      status: 'active',
+      nextStartDate: iso(addDays(arjunEnd(), 1)),
+    });
     expect(res.body.data.items).toHaveLength(2);
     expect(JSON.stringify(res.body)).not.toContain('owner approved');
     expect(res.body.data.items[0]).not.toHaveProperty('soldBy');

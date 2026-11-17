@@ -36,3 +36,18 @@ export function addDays(d: Date, days: number): Date {
 export function daysBetween(a: Date, b: Date): number {
   return Math.round((b.getTime() - a.getTime()) / DAY_MS);
 }
+
+/**
+ * Last day (inclusive) of a period of `months` calendar months starting on `start`: the day before
+ * the same date `months` later (15 Jan + 1 → 14 Feb). If that date doesn't exist, the period runs
+ * to the end of that month (31 Jan + 1 → 28/29 Feb), so a member never loses the short month.
+ * Renewals chain without gaps: the next period starts the day after.
+ */
+export function periodEnd(start: Date, months: number): Date {
+  const y = start.getUTCFullYear();
+  const m = start.getUTCMonth() + months;
+  const d = start.getUTCDate();
+  const lastDayOfTarget = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  if (d > lastDayOfTarget) return new Date(Date.UTC(y, m, lastDayOfTarget));
+  return new Date(Date.UTC(y, m, d - 1));
+}

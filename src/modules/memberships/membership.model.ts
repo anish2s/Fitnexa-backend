@@ -17,7 +17,8 @@ const membershipSchema = new Schema(
     plan: {
       planId: { type: Schema.Types.ObjectId, ref: 'Plan', required: true },
       name: { type: String, required: true, maxlength: 80 },
-      durationDays: { type: Number, required: true },
+      duration: { type: String, required: true, maxlength: 20 },
+      months: { type: Number, required: true },
       pricePaise: { type: Number, required: true },
       taxMode: { type: String, enum: TAX_MODES, required: true },
       gstRate: { type: Number, enum: GST_RATES, required: true },

@@ -27,8 +27,8 @@ Status legend: ✅ implemented & tested · 🟡 implemented, DB tests not yet ru
 | users | Split out **`platformAdmins`** (no tenantId) from tenant `users` | Keeps `users` strictly tenant-scoped; super admins can't accidentally match a gym query. |
 | users | Add `memberId` (for role `member`), `permissions[]` overrides, `lastLoginAt`, `failedLogins`, `lockedUntil`, `passwordChangedAt` | Member logins link to a member record; lockout; invalidate tokens after password change. |
 | members | Add `memberCode` (per-gym short id), `archivedAt`, `consent { at, version, channel }`, `notes`, `photoPublicId` | Front-desk lookup; DPDP consent; Cloudinary deletion needs the public id. |
-| plans | `durationMonths` → `durationDays` + `durationLabel`; `pricePaise`; `gstRatePct`; `isGstInclusive` | Gyms sell 15-day, 45-day, and 12+1-month plans; GST may be inclusive or exclusive. |
-| memberships | Snapshot `plan { name, durationDays, pricePaise, gstRatePct }`; `amountPaise`, `discountPaise`, `paidPaise`, `balancePaise`; `cancelledAt`; drop stored `status` in favour of derived status + `renewalStatus` | Partial payments are common at Indian gyms; status computed from dates can't go stale. |
+| plans | `duration` (`monthly/quarterly/half_yearly/yearly`, owner's decision 2026-11-17) + derived `months`; `pricePaise`; `gstRatePct`; `isGstInclusive` | Gyms sell 15-day, 45-day, and 12+1-month plans; GST may be inclusive or exclusive. |
+| memberships | Snapshot `plan { name, duration, months, pricePaise, gstRate }`; `amountPaise`, `discountPaise`, `paidPaise`, `balancePaise`; `cancelledAt`; drop stored `status` in favour of derived status + `renewalStatus` | Partial payments are common at Indian gyms; status computed from dates can't go stale. |
 | payments | `amountPaise`, `mode` (cash/upi/card/bank/online), `gst { taxablePaise, cgstPaise, sgstPaise, igstPaise }`, `receiptNumber` (unique per tenant), `idempotencyKey` (unique per tenant), `gateway { orderId, paymentId, signatureVerified }`, `refunds[]`, `recordedBy` | Receipts, duplicate prevention, Razorpay verification, refunds, accountability. |
 | attendance | Add `day` (YYYY-MM-DD in gym timezone), `recordedBy`; unique `{ tenantId, memberId, day }` | Hard guarantee against duplicate check-ins; fast daily reports. |
 | auditLogs | Add `actorType` (platform/user), `impersonatorId`, `ip`, `userAgent`, `requestId`, `changes` (field-level before/after, PII-masked) | Required for audited impersonation and incident investigation. |
@@ -115,13 +115,13 @@ disabled in the same transaction as the member.
 upsert. Keys: `memberCode` (receipt numbers join in M6).
 
 ### plans ✅ (tenant-scoped)
-`src/modules/plans/plan.model.ts`. `name`, `nameKey` (lower-cased), `description`, `durationDays`,
+`src/modules/plans/plan.model.ts`. `name`, `nameKey` (lower-cased), `description`, `duration` (`monthly/quarterly/half_yearly/yearly`), `months` (1/3/6/12, for sorting),
 `pricePaise`, `taxMode` (`inclusive/exclusive/none`), `gstRate` (0/5/12/18/28), `archivedAt` (explicit
-`null` while live). Indexes: `{ tenantId, archivedAt, durationDays }`,
+`null` while live). Indexes: `{ tenantId, archivedAt, months }`,
 `{ tenantId, nameKey } unique partial (archivedAt null)`.
 
 ### memberships ✅ (tenant-scoped)
-`src/modules/memberships/membership.model.ts`. `memberId`, `plan { planId, name, durationDays,
+`src/modules/memberships/membership.model.ts`. `memberId`, `plan { planId, name, duration, months,
 pricePaise, taxMode, gstRate }` (snapshot at sale), `discountPaise`, `basePaise`, `gstPaise`, `totalPaise`,
 `startDate`, `endDate` (calendar dates, inclusive), `kind` (`new/renewal`), `previousMembershipId`,
 `soldBy`, `notes`, `cancelledAt` (explicit null), `cancelledBy`, `cancelReason`.

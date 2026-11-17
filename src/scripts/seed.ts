@@ -3,7 +3,8 @@ import { pathToFileURL } from 'node:url';
 import mongoose, { Types } from 'mongoose';
 import { hashPassword } from '../auth/password.js';
 import { Member, Membership, Plan, PlatformAdmin, Tenant, User } from '../db/models.js';
-import { addDays, parseDateOnly, todayIn } from '../lib/dates.js';
+import { addDays, parseDateOnly, periodEnd, todayIn } from '../lib/dates.js';
+import { PLAN_DURATIONS, type PlanDuration } from '../modules/plans/plan.model.js';
 import { priceBreakdown } from '../lib/money.js';
 import { nextSequence } from '../modules/counters/counter.model.js';
 import { MEMBER_CONSENT_VERSION } from '../modules/members/member.model.js';
@@ -37,11 +38,12 @@ interface DemoGym {
   }[];
 }
 
-/** name, days, price in rupees (incl. GST where the gym charges it). */
-export const DEMO_PLANS: [string, number, number][] = [
-  ['Monthly', 30, 1500],
-  ['Quarterly', 90, 4000],
-  ['Annual', 365, 12000],
+/** name, length, price in rupees (incl. GST where the gym charges it). */
+export const DEMO_PLANS: [string, PlanDuration, number][] = [
+  ['Monthly', 'monthly', 1500],
+  ['Quarterly', 'quarterly', 4000],
+  ['Half-yearly', 'half_yearly', 7500],
+  ['Annual', 'yearly', 12000],
 ];
 
 export const DEMO_GYMS: DemoGym[] = [
@@ -55,14 +57,14 @@ export const DEMO_GYMS: DemoGym[] = [
     owner: { name: 'Rahul Mehta', email: 'owner@powerhouse.demo', phone: '+919800000001' },
     staff: { name: 'Sneha Patil', email: 'desk@powerhouse.demo', phone: '+919800000002' },
     members: [
-      // Monthly, ends in 4 days (expiring soon).
+      // Monthly, started 25 days ago: ends within the week (expiring soon).
       {
         name: 'Arjun Sharma',
         email: 'arjun@member.demo',
         phone: '+919811111111',
         membership: { plan: 'Monthly', startedDaysAgo: 25 },
       },
-      // Quarterly, expired 11 days ago.
+      // Quarterly, started 100 days ago: expired about 10 days ago.
       {
         name: 'Priya Nair',
         email: 'priya@member.demo',
@@ -149,13 +151,14 @@ export async function seedDemo(
         ? { taxMode: 'inclusive' as const, gstRate: 18 as const }
         : { taxMode: 'none' as const, gstRate: 0 as const };
       const plans = new Map<string, InstanceType<typeof Plan>>();
-      for (const [name, durationDays, rupees] of DEMO_PLANS) {
+      for (const [name, duration, rupees] of DEMO_PLANS) {
         plans.set(
           name,
           await Plan.create({
             name,
             nameKey: name.toLowerCase(),
-            durationDays,
+            duration,
+            months: PLAN_DURATIONS[duration],
             pricePaise: rupees * 100,
             ...tax,
           }),
@@ -189,7 +192,8 @@ export async function seedDemo(
             plan: {
               planId: plan._id,
               name: plan.name,
-              durationDays: plan.durationDays,
+              duration: plan.duration,
+              months: plan.months,
               pricePaise: plan.pricePaise,
               taxMode: plan.taxMode,
               gstRate: plan.gstRate,
@@ -197,7 +201,7 @@ export async function seedDemo(
             discountPaise: 0,
             ...priceBreakdown(plan.pricePaise, plan.taxMode, plan.gstRate),
             startDate,
-            endDate: addDays(startDate, plan.durationDays - 1),
+            endDate: periodEnd(startDate, plan.months),
             kind: 'new',
           });
         }

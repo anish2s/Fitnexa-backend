@@ -31,13 +31,21 @@ describeWithDb('plans (real MongoDB)', () => {
   it('lists live plans by duration with the GST breakdown; staff can read', async () => {
     const res = await call('get', PH, '/plans', desk);
     expect(res.status).toBe(200);
-    expect(res.body.data.map((p: { name: string }) => p.name)).toEqual([
-      'Monthly',
-      'Quarterly',
-      'Annual',
+    expect(
+      res.body.data.map((p: { name: string; duration: string; months: number }) => [
+        p.name,
+        p.duration,
+        p.months,
+      ]),
+    ).toEqual([
+      ['Monthly', 'monthly', 1],
+      ['Quarterly', 'quarterly', 3],
+      ['Half-yearly', 'half_yearly', 6],
+      ['Annual', 'yearly', 12],
     ]);
     expect(res.body.data[0]).toMatchObject({
-      durationDays: 30,
+      duration: 'monthly',
+      months: 1,
       pricePaise: 150000,
       taxMode: 'inclusive',
       gstRate: 18,
@@ -50,7 +58,7 @@ describeWithDb('plans (real MongoDB)', () => {
   it('owner creates a plan: defaults to GST inclusive at 18% with a GSTIN, no GST without', async () => {
     const ph = await call('post', PH, '/plans', owner).send({
       name: 'Student Monthly',
-      durationDays: 30,
+      duration: 'monthly',
       pricePaise: 99900,
     });
     expect(ph.status).toBe(201);
@@ -58,14 +66,14 @@ describeWithDb('plans (real MongoDB)', () => {
 
     const fz = await call('post', FZ, '/plans', fzOwner).send({
       name: 'Student Monthly',
-      durationDays: 30,
+      duration: 'monthly',
       pricePaise: 99900,
     });
     expect(fz.body.data).toMatchObject({ taxMode: 'none', gstRate: 0 });
 
     const ex = await call('post', PH, '/plans', owner).send({
       name: 'PT 10 sessions',
-      durationDays: 60,
+      duration: 'quarterly',
       pricePaise: 500000,
       taxMode: 'exclusive',
       gstRate: 18,
@@ -85,7 +93,7 @@ describeWithDb('plans (real MongoDB)', () => {
   it('a gym without a GSTIN cannot charge GST', async () => {
     const res = await call('post', FZ, '/plans', fzOwner).send({
       name: 'Taxed',
-      durationDays: 30,
+      duration: 'monthly',
       pricePaise: 100000,
       taxMode: 'inclusive',
       gstRate: 18,
@@ -96,12 +104,12 @@ describeWithDb('plans (real MongoDB)', () => {
 
   it('422 for bad input: fractional paise, 0 days, unknown GST rate, GST mode with 0%', async () => {
     for (const body of [
-      { name: 'X', durationDays: 30, pricePaise: 999.5 },
-      { name: 'X', durationDays: 0, pricePaise: 1000 },
-      { name: 'X', durationDays: 30, pricePaise: 1000, gstRate: 15 },
-      { name: 'X', durationDays: 30, pricePaise: 1000, taxMode: 'exclusive', gstRate: 0 },
-      { name: '', durationDays: 30, pricePaise: 1000 },
-      { name: 'X', durationDays: 30, pricePaise: -1 },
+      { name: 'X', duration: 'monthly', pricePaise: 999.5 },
+      { name: 'X', duration: 'weekly', pricePaise: 1000 },
+      { name: 'X', duration: 'monthly', pricePaise: 1000, gstRate: 15 },
+      { name: 'X', duration: 'monthly', pricePaise: 1000, taxMode: 'exclusive', gstRate: 0 },
+      { name: '', duration: 'monthly', pricePaise: 1000 },
+      { name: 'X', duration: 'monthly', pricePaise: -1 },
     ]) {
       expect(
         (await call('post', PH, '/plans', owner).send(body)).status,
@@ -113,7 +121,7 @@ describeWithDb('plans (real MongoDB)', () => {
   it('live plan names are unique per gym (case-insensitive); archived names can be reused', async () => {
     const dup = await call('post', PH, '/plans', owner).send({
       name: 'monthly',
-      durationDays: 30,
+      duration: 'monthly',
       pricePaise: 1,
     });
     expect(dup.status).toBe(409);
@@ -121,7 +129,7 @@ describeWithDb('plans (real MongoDB)', () => {
     expect((await call('post', PH, `/plans/${id}/archive`, owner)).status).toBe(200);
     const again = await call('post', PH, '/plans', owner).send({
       name: 'Monthly',
-      durationDays: 30,
+      duration: 'monthly',
       pricePaise: 160000,
     });
     expect(again.status).toBe(201);
@@ -148,7 +156,7 @@ describeWithDb('plans (real MongoDB)', () => {
     );
 
     await call('post', PH, `/plans/${id}/archive`, owner);
-    expect((await call('get', PH, '/plans', owner)).body.data).toHaveLength(2);
+    expect((await call('get', PH, '/plans', owner)).body.data).toHaveLength(3);
     expect((await call('get', PH, '/plans?archived=true', owner)).body.data[0].name).toBe(
       'Quarterly',
     );
@@ -159,7 +167,7 @@ describeWithDb('plans (real MongoDB)', () => {
   });
 
   it('authorization: staff read only (unless granted plans:manage); members and anonymous refused', async () => {
-    const body = { name: 'Desk Plan', durationDays: 30, pricePaise: 1000 };
+    const body = { name: 'Desk Plan', duration: 'monthly', pricePaise: 1000 };
     expect((await call('post', PH, '/plans', desk).send(body)).status).toBe(403);
     const deskId = await runInTenant(await gymId('powerhouse'), async () =>
       String((await User.findOne({ email: 'desk@powerhouse.demo' }).lean())!._id),

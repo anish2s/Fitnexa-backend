@@ -1,5 +1,12 @@
 import mongoose, { Types } from 'mongoose';
-import { addDays, daysBetween, formatDateOnly, parseDateOnly, todayIn } from '../../lib/dates.js';
+import {
+  addDays,
+  daysBetween,
+  formatDateOnly,
+  parseDateOnly,
+  periodEnd,
+  todayIn,
+} from '../../lib/dates.js';
 import { Errors } from '../../lib/errors.js';
 import { priceBreakdown, type GST_RATES, type TaxMode } from '../../lib/money.js';
 
@@ -28,7 +35,8 @@ export type LeanMembership = {
   plan: {
     planId: Types.ObjectId;
     name: string;
-    durationDays: number;
+    duration: string;
+    months: number;
     pricePaise: number;
     taxMode: TaxMode;
     gstRate: number;
@@ -84,7 +92,8 @@ export function toMembershipView(
     plan: {
       id: String(m.plan.planId),
       name: m.plan.name,
-      durationDays: m.plan.durationDays,
+      duration: m.plan.duration,
+      months: m.plan.months,
       pricePaise: m.plan.pricePaise,
       taxMode: m.plan.taxMode,
       gstRate: m.plan.gstRate,
@@ -196,7 +205,7 @@ export function createMembershipService(deps: { audit: AuditService }) {
         { path: 'discountPaise', message: 'Discount is more than the price' },
       ]);
     }
-    const endDate = addDays(startDate, plan.durationDays - 1);
+    const endDate = periodEnd(startDate, plan.months);
     const money = priceBreakdown(plan.pricePaise, plan.taxMode, plan.gstRate, args.discountPaise);
     const id = new Types.ObjectId();
 
@@ -229,7 +238,8 @@ export function createMembershipService(deps: { audit: AuditService }) {
               plan: {
                 planId: plan._id,
                 name: plan.name,
-                durationDays: plan.durationDays,
+                duration: plan.duration,
+                months: plan.months,
                 pricePaise: plan.pricePaise,
                 taxMode: plan.taxMode,
                 gstRate: plan.gstRate as GstRate,

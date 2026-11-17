@@ -15,6 +15,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] **Email provider** (2026-11-17): **Resend**, free plan (100/day, 3,000/month).
 - [x] **Audit log retention** (2026-11-17): **1 year** (TTL index).
 - [x] **Audit log DB permissions** (2026-11-17): app-level append-only is enough for now (accepted risk).
+- [x] **Plan lengths** (2026-11-17): calendar months only: monthly, quarterly, half-yearly, yearly. Ends the day before the same date N months later; short months run to month end.
 
 ## Phase 1 milestones
 
@@ -64,7 +65,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Cross-tenant suite for **every** model: classifies all models (a new unscoped model fails CI), checks every index starts with `tenantId`, and proves FitZone can't list/count/fetch/aggregate/update/delete Powerhouse rows in any collection
 
 ### M5 — Plans & memberships ✅
-- [x] Plans CRUD + archive/restore (days, integer-paise price, GST inclusive/exclusive/none at 0/5/12/18/28%, GST only with a GSTIN, unique live names); 8 integration + 6 money unit tests
+- [x] Plans CRUD + archive/restore (monthly/quarterly/half-yearly/yearly, integer-paise price, GST inclusive/exclusive/none at 0/5/12/18/28%, GST only with a GSTIN, unique live names); 8 integration + 6 money unit tests
 - [x] Sell, renew (from expiry or today), cancel, history (staff + member app); derived status; gym-wide status lists; expiring-soon excluding renewed/archived; no overlaps (race-safe); price snapshot; 13 integration tests
 
 ### M6 — Payments & receipts

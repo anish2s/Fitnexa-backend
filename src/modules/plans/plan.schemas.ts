@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { GST_RATES, TAX_MODES } from '../../lib/money.js';
 import { objectId, pageQuery } from '../../lib/pagination.js';
+import { DURATION_KEYS } from './plan.model.js';
 
 const gstRate = z.union(
   GST_RATES.map((r) => z.literal(r)) as unknown as [
@@ -22,7 +23,7 @@ export const planListQuery = pageQuery.extend({
 const fields = {
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(500),
-  durationDays: z.number().int().min(1).max(1095),
+  duration: z.enum(DURATION_KEYS as [string, ...string[]]),
   /** Integer paise, e.g. ₹4,500 → 450000. */
   pricePaise: z.number().int().min(0).max(1_00_00_000),
   taxMode: z.enum(TAX_MODES),
@@ -32,7 +33,8 @@ const fields = {
 export const createPlanBody = z.object({
   name: fields.name,
   description: fields.description.optional(),
-  durationDays: fields.durationDays,
+  /** monthly | quarterly | half_yearly | yearly */
+  duration: fields.duration,
   pricePaise: fields.pricePaise,
   /** Default: GST included in the price at 18% when the gym has a GSTIN, otherwise no GST. */
   taxMode: fields.taxMode.optional(),
@@ -43,7 +45,7 @@ export const updatePlanBody = z
   .object({
     name: fields.name.optional(),
     description: fields.description.nullable().optional(),
-    durationDays: fields.durationDays.optional(),
+    duration: fields.duration.optional(),
     pricePaise: fields.pricePaise.optional(),
     taxMode: fields.taxMode.optional(),
     gstRate: fields.gstRate.optional(),
