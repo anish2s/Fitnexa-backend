@@ -1,11 +1,11 @@
 # Progress
 
-_Last updated: 2026-11-13_
+_Last updated: 2026-11-17_
 
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–10 complete; [completion report](PHASE1-REPORT.md) awaiting the owner's approval. Phase 2 does not start until approved.**
+**Phase 1 — Backend: approved by the owner on 2026-11-17** ([completion report](PHASE1-REPORT.md)), with live Resend email and the live Razorpay test payment deferred (see Decisions). Phase 2 (dashboard) may start.
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -17,6 +17,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] **Audit log DB permissions** (2026-11-17): app-level append-only is enough for now (accepted risk).
 - [ ] **Open (owner to decide later)**: should front-desk staff see revenue on the dashboard? Built: no (owner and `reports:read` only; one-line change).
 - [ ] **Open (owner to decide later)**: renewal rate counts late renewals as renewed and ignores memberships not yet ended (late renewals also shown separately). Built that way.
+- [x] **Phase 1 approval** (2026-11-17): owner approved Phase 1. **Deferred**, not done: live Resend delivery (needs API key + verified domain) and a live Razorpay test-mode round trip (needs a test account). Both are built and tested against fakes; they stay `[~]` until verified live, and must be done before the pilot charges or emails real members.
 - [x] **Plan lengths** (2026-11-17): calendar months only: monthly, quarterly, half-yearly, yearly. Ends the day before the same date N months later; short months run to month end.
 
 ## Phase 1 milestones
@@ -58,7 +59,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] `auditLogs` (per gym, readable by the owner) + `platformAuditLogs`; append-only at the model layer; field-level changes with email/phone masked; hooks on login, lockout, invite/reset, password change, logout-all, all M3 actions
 - [x] 172 tests passing on real MongoDB (29 new M3 integration tests incl. cross-tenant and role checks); typecheck, lint, build
 
-### M4 — Staff & member management ✅ (live email still needs Resend credentials)
+### M4 — Staff & member management ✅ (live email deferred at Phase 1 approval)
 - [~] **Real email provider: Resend** (moved up from M9). Transport, config validation, failure handling done and tested with a fake API; **blocked** on live delivery until a Resend API key and verified sending domain exist (see DEPLOYMENT.md)
 - [x] Staff CRUD, deactivate (ends sessions), activate, re-invite, permission overrides (grantable list only); 11 integration tests incl. IDOR + cross-tenant
 - [x] Members CRUD, archive/restore, search, pagination, profile, member self-profile (`/members/me`), consent capture, per-gym member codes, login kept in step with email; 12 integration tests incl. IDOR, cross-tenant, concurrent codes
@@ -70,7 +71,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Plans CRUD + archive/restore (monthly/quarterly/half-yearly/yearly, integer-paise price, GST inclusive/exclusive/none at 0/5/12/18/28%, GST only with a GSTIN, unique live names); 8 integration + 6 money unit tests
 - [x] Sell, renew (from expiry or today), cancel, history (staff + member app); derived status; gym-wide status lists; expiring-soon excluding renewed/archived; no overlaps (race-safe); price snapshot; 13 integration tests
 
-### M6 — Payments & receipts ✅ (live Razorpay round trip pending a test account)
+### M6 — Payments & receipts ✅ (live Razorpay round trip deferred at Phase 1 approval)
 - [x] Cash / UPI / card / bank transfer recording; required Idempotency-Key (replay, conflict on reuse, race-safe); sell + collect in one transaction
 - [x] Receipt numbering per gym per Indian FY, gap-free (counter in the payment transaction)
 - [x] PDF receipt (staff + member's own), CGST/SGST split; content verified by decoding the PDF text in tests
@@ -97,7 +98,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] OpenAPI 3.1 generated from the real routers + Zod schemas (101 operations, permissions, headers, CSV/PDF bodies); served at `/api/v1/openapi.json`, committed as `docs/openapi.json` with a drift test; Swagger UI at `/api/docs` in development (assets served locally; in production only with `ENABLE_API_DOCS=true`)
 - [x] Security review against SECURITY.md + automated route audit over every route (public allow-list, permissions, platform admin, id/body validation, idempotency, impersonation blocks); fixed: PII in request-log query strings, default `no-store`; dependency audit 0 vulnerabilities, in-range updates; no secrets in repo or history
 - [x] Deployment instructions verified end to end **locally** (clean clone, production build with runtime deps only, production env, simulated proxy, 21 checks, graceful shutdown exit 0); doc fixed (Rule 7, prune step, ship package.json, env-file quoting). Real host still needs the owner (DNS/TLS, Atlas, Resend)
-- [x] Phase 1 completion report: [PHASE1-REPORT.md](PHASE1-REPORT.md), **awaiting owner approval**
+- [x] Phase 1 completion report: [PHASE1-REPORT.md](PHASE1-REPORT.md), **approved by the owner 2026-11-17** (live Resend and Razorpay deferred)
 
 ### M10.1 — Review follow-ups ✅
 - [x] Webhook test signs a pretty-printed body: accepted when signed over those bytes, refused when signed over the compact form (proves raw-byte verification)
@@ -175,3 +176,5 @@ depend on the backend.
   alerts instead of extending the membership, local Swagger UI assets (production opt-in), report
   file count fixed. 398 tests passing (38 files). New collection `gatewayalerts`: run
   `npm run db:indexes` on existing databases.
+- **2026-11-17** — **Phase 1 approved by the owner.** Deferred: live Resend email and the live
+  Razorpay test payment (credentials/accounts not set up yet; both remain `[~]`). Phase 2 is unblocked.
