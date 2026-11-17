@@ -1,11 +1,21 @@
 import { readFileSync } from 'node:fs';
 
-/** From package.json (works from src/ under tsx and from dist/ in production). */
-export const PACKAGE_VERSION: string = (
-  JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
-    version: string;
+/**
+ * From package.json (works from src/ under tsx and from dist/ in production). Never fatal: an image
+ * that ships only dist/ must still boot, it just reports an unknown version.
+ */
+export const PACKAGE_VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(
+      readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+    ) as {
+      version?: string;
+    };
+    return pkg.version ?? '0.0.0-unknown';
+  } catch {
+    return '0.0.0-unknown';
   }
-).version;
+})();
 
 const SWAGGER = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14';
 
