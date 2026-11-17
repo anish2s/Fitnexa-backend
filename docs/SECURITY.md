@@ -87,6 +87,9 @@ Notes for the frontend (Phase 2/3):
 | Audit writes for ordinary actions don't fail the request; a failed write is logged with the full entry | ✅ (code) |
 | Search input escaped before use in a RegExp | ✅ |
 | Audit entries expire after 1 year (TTL index on both audit collections) | ✅ |
+| Staff endpoints pin path ids to `role: staff` in the host gym: owners/members can't be edited through them (IDOR test) | ✅ |
+| Staff grants limited to `STAFF_GRANTABLE`; `staff:manage`, gym settings, branding, audit never grantable | ✅ |
+| Deactivating staff ends all their sessions and blocks the next request | ✅ |
 
 ## Email ✅ (transport) · 🟡 (live delivery)
 

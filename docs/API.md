@@ -154,7 +154,30 @@ Email and phone values appear as `[hidden]` in `changes`.
 Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `auth.password_reset`,
 `auth.password_change`, `auth.logout_all`, `gym.update`, `gym.branding_update`, `tenant.create`,
 `tenant.update`, `tenant.branding_update`, `tenant.suspend`, `tenant.activate`, `tenant.owner_invite`,
-`impersonation.start`, `impersonation.end`.
+`impersonation.start`, `impersonation.end`, `staff.create`, `staff.update`,
+`staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`.
+
+## Staff — `/api/v1/staff` (gym host)
+
+The gym's team. Reading needs `staff:read`, changes need `staff:manage` (both owner-only; neither can
+be granted to staff). Owners appear in the list but can only be changed from the platform console.
+
+| Method & path | Body / query | Result |
+|---|---|---|
+| `GET /staff` | `?q&role=owner|staff&status&page&limit` | `[staff view]` + page meta |
+| `GET /staff/:id` | — | staff view (owners too) |
+| `POST /staff` | `{ name, email, phone?, permissions?: grantable[] }` | `201 { staff, inviteSent, inviteError }`. Starts `invited`; an invite email lets them set a password. **Email is required.** |
+| `PATCH /staff/:id` | any of `name, email, phone (null clears), permissions` | staff view |
+| `POST /staff/:id/deactivate` | — | staff view. Ends all their sessions immediately. `409` if already disabled. |
+| `POST /staff/:id/activate` | — | staff view (`active`, or `invited` if they never set a password) |
+| `POST /staff/:id/invite` | — | `202 { sent, reason }`. `409` once accepted. |
+
+Staff view: `{ id, name, email, phone, role, status: invited|active|disabled, grants[], permissions[], lastLoginAt, createdAt }`.
+`grants` are the owner's extra grants; `permissions` is the full effective set.
+Grantable: `reports:read, payments:refund, members:archive, members:import, plans:manage, renewals:manage`.
+
+Email and phone are unique per gym across **all** roles: a person can't be staff and member of the
+same gym with the same email (`409 DUPLICATE`).
 
 ## Super admin console — `/api/v1/platform` (platform host, super admin only)
 

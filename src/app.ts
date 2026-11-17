@@ -16,6 +16,7 @@ import { createAuthService } from './modules/auth/auth.service.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { platformRouter } from './modules/platform/platform.routes.js';
 import { createPlatformService } from './modules/platform/platform.service.js';
+import { staffRouter } from './modules/staff/staff.routes.js';
 import { gymRouter } from './modules/tenants/gym.routes.js';
 import { publicTenantRouter } from './modules/tenants/public.routes.js';
 import { resolveTenant, type TenantLookup } from './tenancy/resolver.middleware.js';
@@ -105,6 +106,7 @@ export function createApp(deps: AppDeps) {
   v1.use('/auth', authRouter({ env, jwt, auth, audit }));
   v1.use('/gym', gymRouter({ jwt, audit }));
   v1.use('/audit-logs', auditRouter({ jwt, audit }));
+  v1.use('/staff', staffRouter({ jwt, auth, audit }));
   v1.use('/platform', platformRouter({ jwt, platform, audit }));
   app.use('/api/v1', v1);
 

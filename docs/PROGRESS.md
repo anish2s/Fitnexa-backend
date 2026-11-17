@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–3 complete and verified against a real MongoDB 8.0. Milestone 4 next.**
+**Phase 1 — Backend. Milestones 1–3 complete and verified against a real MongoDB 8.0. Milestone 4 in progress.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -57,7 +57,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 
 ### M4 — Staff & member management
 - [~] **Real email provider: Resend** (moved up from M9). Transport, config validation, failure handling done and tested with a fake API; **blocked** on live delivery until a Resend API key and verified sending domain exist (see DEPLOYMENT.md)
-- [ ] Staff CRUD, deactivate, permission overrides
+- [x] Staff CRUD, deactivate (ends sessions), activate, re-invite, permission overrides (grantable list only); 11 integration tests incl. IDOR + cross-tenant
 - [ ] Members CRUD, archive, search, pagination, profile
 - [ ] Cloudinary signed uploads (logo, member photo)
 - [ ] CSV member import with dry-run + error report
