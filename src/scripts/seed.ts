@@ -1,13 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { hashPassword } from '../auth/password.js';
-import { PlatformAdmin, Tenant, User } from '../db/models.js';
+import { Member, PlatformAdmin, Tenant, User } from '../db/models.js';
+import { nextSequence } from '../modules/counters/counter.model.js';
+import { MEMBER_CONSENT_VERSION } from '../modules/members/member.model.js';
+import { formatMemberCode } from '../modules/members/member.service.js';
 import { runInTenant } from '../tenancy/context.js';
 
 /**
  * Demo data: one super admin and two gyms, each with an owner, a front-desk staff member and
- * three members. Used for local development, demos and the pilot sales mockup.
+ * four members (three with email for the member app, one walk-in without). Used for local development, demos and the pilot sales mockup.
  *
  * - Refuses to run with NODE_ENV=production.
  * - Never deletes anything: a gym whose slug already exists is left untouched.
@@ -22,7 +25,7 @@ interface DemoGym {
   city: string;
   owner: { name: string; email: string; phone: string };
   staff: { name: string; email: string; phone: string };
-  members: { name: string; email: string; phone: string }[];
+  members: { name: string; email?: string; phone: string }[];
 }
 
 export const DEMO_GYMS: DemoGym[] = [
@@ -38,6 +41,8 @@ export const DEMO_GYMS: DemoGym[] = [
       { name: 'Arjun Sharma', email: 'arjun@member.demo', phone: '+919811111111' },
       { name: 'Priya Nair', email: 'priya@member.demo', phone: '+919811111112' },
       { name: 'Vikram Singh', email: 'vikram@member.demo', phone: '+919811111113' },
+      // No email: managed by the front desk, no member-app access.
+      { name: 'Suresh Kumar', phone: '+919833333331' },
     ],
   },
   {
@@ -52,6 +57,7 @@ export const DEMO_GYMS: DemoGym[] = [
       { name: 'Arjun Sharma', email: 'arjun@member.demo', phone: '+919811111111' },
       { name: 'Meera Iyer', email: 'meera@member.demo', phone: '+919822222222' },
       { name: 'Rohan Das', email: 'rohan@member.demo', phone: '+919822222223' },
+      { name: 'Anita Joshi', phone: '+919833333341' },
     ],
   },
 ];
@@ -97,8 +103,25 @@ export async function seedDemo(
       await User.create([
         { ...g.owner, role: 'owner' as const, passwordHash },
         { ...g.staff, role: 'staff' as const, passwordHash },
-        ...g.members.map((m) => ({ ...m, role: 'member' as const })),
       ]);
+      // Member record + (with an email) a linked member login, as the members API creates them.
+      for (const m of g.members) {
+        const memberId = new Types.ObjectId();
+        const userId = m.email ? new Types.ObjectId() : undefined;
+        await Member.create({
+          _id: memberId,
+          memberCode: formatMemberCode(await nextSequence('memberCode')),
+          name: m.name,
+          phone: m.phone,
+          email: m.email,
+          joinDate: new Date(Date.UTC(2026, 0, 15)),
+          consent: { at: new Date(), version: MEMBER_CONSENT_VERSION },
+          userId,
+        });
+        if (userId) {
+          await User.create({ _id: userId, ...m, role: 'member' as const, memberId });
+        }
+      }
     });
     result.gyms.push({ slug: g.slug, created: true });
   }
@@ -129,7 +152,7 @@ async function main() {
           `${g.name.padEnd(19)} http://${g.slug}.localhost:4000  (${status})\n` +
           `   owner  ${g.owner.email} / ${g.owner.phone}\n` +
           `   staff  ${g.staff.email} / ${g.staff.phone}\n` +
-          `   members (email link): ${g.members.map((m) => m.email).join(', ')}`
+          `   members (email link): ${g.members.flatMap((m) => (m.email ? [m.email] : [])).join(', ')}`
         );
       }),
       '',

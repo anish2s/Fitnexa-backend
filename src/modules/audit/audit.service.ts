@@ -43,7 +43,7 @@ export interface AuditListFilter extends PageQuery {
 }
 
 /** Field names whose values identify a person: the log records THAT they changed, not to what. */
-const PERSONAL_FIELDS = new Set(['email', 'phone']);
+const PERSONAL_FIELDS = new Set(['email', 'phone', 'dateOfBirth', 'notes']);
 export const MASKED = '[hidden]';
 
 const clip = (s: string | undefined, n: number) => (s ? s.slice(0, n) : undefined);
@@ -82,7 +82,13 @@ const comparable = (v: unknown) => JSON.stringify(v ?? null);
  * Field-level before/after for the given dotted paths, skipping paths that didn't change.
  * Personal fields are masked.
  */
-export function diffChanges(before: unknown, after: unknown, paths: string[]): AuditChange[] {
+export function diffChanges(
+  before: unknown,
+  after: unknown,
+  paths: string[],
+  /** Extra dotted paths to mask, e.g. a member's `name` (a gym's name is not personal). */
+  alsoMask: readonly string[] = [],
+): AuditChange[] {
   const out: AuditChange[] = [];
   for (const field of paths) {
     const from = getPath(before, field) ?? null;
@@ -90,7 +96,7 @@ export function diffChanges(before: unknown, after: unknown, paths: string[]): A
     if (comparable(from) === comparable(to)) continue;
     const leaf = field.split('.').at(-1)!;
     out.push(
-      PERSONAL_FIELDS.has(leaf)
+      PERSONAL_FIELDS.has(leaf) || alsoMask.includes(field)
         ? { field, from: from === null ? null : MASKED, to: to === null ? null : MASKED }
         : { field, from, to },
     );

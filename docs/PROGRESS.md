@@ -58,7 +58,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 ### M4 — Staff & member management
 - [~] **Real email provider: Resend** (moved up from M9). Transport, config validation, failure handling done and tested with a fake API; **blocked** on live delivery until a Resend API key and verified sending domain exist (see DEPLOYMENT.md)
 - [x] Staff CRUD, deactivate (ends sessions), activate, re-invite, permission overrides (grantable list only); 11 integration tests incl. IDOR + cross-tenant
-- [ ] Members CRUD, archive, search, pagination, profile
+- [x] Members CRUD, archive/restore, search, pagination, profile, member self-profile (`/members/me`), consent capture, per-gym member codes, login kept in step with email; 12 integration tests incl. IDOR, cross-tenant, concurrent codes
 - [ ] Cloudinary signed uploads (logo, member photo)
 - [ ] CSV member import with dry-run + error report
 - [ ] Cross-tenant suite for every model

@@ -155,7 +155,9 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `auth.password_change`, `auth.logout_all`, `gym.update`, `gym.branding_update`, `tenant.create`,
 `tenant.update`, `tenant.branding_update`, `tenant.suspend`, `tenant.activate`, `tenant.owner_invite`,
 `impersonation.start`, `impersonation.end`, `staff.create`, `staff.update`,
-`staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`.
+`staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`, `member.create`,
+`member.update`, `member.self_update`, `member.archive`, `member.restore`. Member names, birth dates,
+notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
 
@@ -178,6 +180,36 @@ Grantable: `reports:read, payments:refund, members:archive, members:import, plan
 
 Email and phone are unique per gym across **all** roles: a person can't be staff and member of the
 same gym with the same email (`409 DUPLICATE`).
+
+## Members — `/api/v1/members` (gym host)
+
+| Method & path | Permission | Body / query | Result |
+|---|---|---|---|
+| `GET /members` | `members:read` | `?q&archived=true|false&sort=-joinDate|joinDate|name|memberCode&joinedFrom&joinedTo&page&limit` | `[{ id, memberCode, name, phone, email, photoUrl, joinDate, appAccess, archivedAt }]` + page meta |
+| `GET /members/:id` | `members:read` | — | member detail |
+| `POST /members` | `members:create` | `{ name, phone, email?, gender?, dateOfBirth?, joinDate?, emergencyContact?{ name, phone, relation? }, notes?, consent: true }` | `201` member detail |
+| `PATCH /members/:id` | `members:update` | any create field except `consent`; `null` clears `email, gender, dateOfBirth, emergencyContact, notes` | member detail. `409` if archived. |
+| `POST /members/:id/archive` | `members:archive` | — | member detail; ends their app sessions |
+| `POST /members/:id/restore` | `members:archive` | — | member detail |
+| `GET /members/me` | `self:read` (members) | — | own profile (no staff notes) |
+| `PATCH /members/me` | `self:update` (members) | any of `gender, dateOfBirth, emergencyContact` | own profile |
+
+- `q` matches name, email, phone digits (3+) or the start of the member code. Typed text is never
+  treated as a pattern.
+- Dates are `YYYY-MM-DD`. `joinDate` defaults to today in the gym's time zone; it may be back-dated
+  but not more than a month ahead. Birth dates must be at least 3 years in the past.
+- `memberCode` (`M0001`, `M0002`…) is assigned per gym, never reused, unique under concurrent
+  registrations.
+- **Consent:** registration requires `consent: true`. The front desk confirms the member agreed to the
+  gym storing their details; the API stores when, which wording version (`v1`) and who recorded it.
+- **App access** follows the email: with an email (and not archived) the member can sign in by email
+  link; adding an email turns it on, removing it or archiving turns it off and ends their sessions.
+  `appAccess: { enabled, reason: null|no_email|archived, lastLoginAt }`.
+- Phone and email are unique per gym, including archived members (restore them instead of
+  re-registering). The same person can be a member of two gyms.
+
+Member detail: `{ id, memberCode, name, phone, email, gender, dateOfBirth, joinDate,
+emergencyContact, photoUrl, notes, consent{ at, version }, appAccess, archivedAt, createdAt, updatedAt }`.
 
 ## Super admin console — `/api/v1/platform` (platform host, super admin only)
 

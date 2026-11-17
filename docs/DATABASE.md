@@ -97,23 +97,23 @@ detection), `rotatedAt`, `expiresAt` (**TTL index**: MongoDB deletes expired ses
 `type` (`magic_link` / `password_reset` / `invite`), `userId`, `tokenHash` (unique per gym),
 `expiresAt`, `usedAt`, `requestedIp`. TTL: deleted 24 h after expiry.
 
-### members ⬜ M4 (tenant-scoped)
-`memberCode`, `name`, `phone`, `email?` (needed for app access), `photoUrl`, `photoPublicId`, `dateOfBirth`, `gender`,
-`joinDate`, `status`, `emergencyContact { name, phone, relation }`, `consent`, `notes`, `archivedAt`.
-Indexes: `{ tenantId, phone } unique`, `{ tenantId, memberCode } unique`, `{ tenantId, status, joinDate }`,
-text-ish search via `{ tenantId, nameLower }` prefix index (Atlas Search later if needed).
+### members ✅ (tenant-scoped)
+`src/modules/members/member.model.ts`. The gym's member record.
 
-### auditLogs ✅ (tenant-scoped) · platformAuditLogs ✅ (not scoped)
-`src/modules/audit/audit.model.ts`. Append-only: update/replace/delete queries throw.
+`memberCode` (`M0001`), `name`, `phone` (E.164, required), `email?`, `gender?`
+(`male/female/other/undisclosed`), `dateOfBirth?`, `joinDate` (calendar dates stored as UTC midnight),
+`emergencyContact { name, phone, relation }`, `notes` (staff only), `photoUrl`, `photoPublicId`,
+`consent { at, version, recordedBy }`, `userId` (linked member login, when there is an email), `archivedAt`.
 
-`action` (`area.verb`), `actor { type: user|platform_admin|system, id, name, role }`,
-`impersonator { id, name }`, `target { type, id }`, `changes[{ field, from, to }]` (email/phone values
-masked), `metadata`, `ip`, `userAgent`, `requestId`, `createdAt`.
-Indexes (prefixed with `tenantId` on the scoped collection): `{ createdAt: -1 }`,
-`{ action, createdAt: -1 }`, `{ actor.id, createdAt: -1 }`.
-Retention: **1 year** (owner's decision 2026-11-17), via a TTL index `{ createdAt: 1 }` with
-`expireAfterSeconds: 31536000` on both collections. Run `npm run db:indexes` on existing databases.
+Indexes: `{ tenantId, memberCode } unique`, `{ tenantId, phone } unique`,
+`{ tenantId, email } unique partial`, `{ tenantId, archivedAt, joinDate: -1 }`, `{ tenantId, userId }`.
+A member's login is a `users` document (role `member`, `memberId` back-reference), created, updated and
+disabled in the same transaction as the member.
 
-### plans ⬜ M5 · memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · counters ⬜ M6 · jobLocks / notifications ⬜ M9
+### counters ✅ (tenant-scoped)
+`src/modules/counters/counter.model.ts`. `key`, `seq`; `{ tenantId, key } unique`. Atomic `$inc` with
+upsert. Keys: `memberCode` (receipt numbers join in M6).
+
+### plans ⬜ M5 · memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · jobLocks / notifications ⬜ M9
 
 Field lists as in the review table above; each gets its own section here when implemented.

@@ -90,6 +90,12 @@ Notes for the frontend (Phase 2/3):
 | Staff endpoints pin path ids to `role: staff` in the host gym: owners/members can't be edited through them (IDOR test) | ✅ |
 | Staff grants limited to `STAFF_GRANTABLE`; `staff:manage`, gym settings, branding, audit never grantable | ✅ |
 | Deactivating staff ends all their sessions and blocks the next request | ✅ |
+| Members: path ids resolved inside the host gym only (cross-tenant test); members reach only `/members/me`, never a record by id (IDOR test) | ✅ |
+| Member creation + login + code counter in one transaction: a duplicate leaves nothing half-created | ✅ |
+| Archiving a member or removing their email ends their sessions immediately | ✅ |
+| DPDP consent captured at registration with time, wording version and recorder | ✅ |
+| Staff notes never returned to the member | ✅ |
+| Audit log masks member names, birth dates, notes, emergency contacts, email, phone | ✅ |
 
 ## Email ✅ (transport) · 🟡 (live delivery)
 
@@ -113,8 +119,8 @@ Notes for the frontend (Phase 2/3):
   window; a token is single-use per day. Screenshots expire.
 
 ## Privacy (DPDP Act 2023) ⬜ M9
-- Collect the minimum: DOB/gender optional; no ID documents stored.
-- Consent recorded with timestamp and version at registration.
+- Collect the minimum: DOB/gender optional; no ID documents stored. ✅ M4
+- Consent recorded with timestamp and version at registration. ✅ M4
 - Export (JSON) and erase (anonymise financial records, delete photo) endpoints for owners.
 - PII never in URLs; PWA never caches authenticated API responses (Phase 3).
 

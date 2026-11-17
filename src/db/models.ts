@@ -8,3 +8,5 @@ export { PlatformAdmin } from '../modules/platform/platform-admin.model.js';
 export { Session, PlatformSession } from '../modules/auth/session.model.js';
 export { AuthToken } from '../modules/auth/auth-token.model.js';
 export { AuditLog, PlatformAuditLog } from '../modules/audit/audit.model.js';
+export { Member } from '../modules/members/member.model.js';
+export { Counter } from '../modules/counters/counter.model.js';
