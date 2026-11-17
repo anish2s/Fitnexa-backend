@@ -15,6 +15,8 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] **Email provider** (2026-11-17): **Resend**, free plan (100/day, 3,000/month).
 - [x] **Audit log retention** (2026-11-17): **1 year** (TTL index).
 - [x] **Audit log DB permissions** (2026-11-17): app-level append-only is enough for now (accepted risk).
+- [ ] **Open (owner to decide later)**: should front-desk staff see revenue on the dashboard? Built: no (owner and `reports:read` only; one-line change).
+- [ ] **Open (owner to decide later)**: renewal rate counts late renewals as renewed and ignores memberships not yet ended (late renewals also shown separately). Built that way.
 - [x] **Plan lengths** (2026-11-17): calendar months only: monthly, quarterly, half-yearly, yearly. Ends the day before the same date N months later; short months run to month end.
 
 ## Phase 1 milestones
