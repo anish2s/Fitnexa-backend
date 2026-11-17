@@ -37,7 +37,7 @@ declare module 'express-serve-static-core' {
  * Identifies the gym from the request host and opens a tenant scope for the rest of the request.
  *
  * The tenant comes only from the host (or, in development, an explicit header). Body, query and
- * route params are never consulted. Authentication (Milestone 2) then requires that the token's
+ * route params are never consulted. authenticate() then requires that the token's
  * tenant equals req.tenant, so a Gym B token presented on Gym A's host is rejected.
  */
 export function resolveTenant(opts: ResolverOptions): RequestHandler {

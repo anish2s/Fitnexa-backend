@@ -1,6 +1,6 @@
 # Security
 
-_Last updated: 2026-11-13 · Phase 1, Milestone 3_
+_Last updated: 2026-11-17 · Phase 1, Milestone 5_
 
 All ✅ items are covered by automated tests that run against a real MongoDB 8.0 server.
 
@@ -144,7 +144,7 @@ Notes for the frontend (Phase 2/3):
 5. In development, the `log` email transport prints sign-in links to the API log. Production refuses
    this transport.
 6. Members without an email address cannot use the member app. Front desk must collect an email at
-   registration (Milestone 4 will make this visible in the member form).
+   registration. The member API reports `appAccess.reason: "no_email"` so the form can flag it (M4).
 7. ~~Audit log retention~~ Decided 2026-11-17: one year, enforced by a TTL index (tested).
 8. **Accepted risk** (owner, 2026-11-17): the audit log is append-only in application code only; the
    MongoDB user can still modify it. No separate DB role for now.

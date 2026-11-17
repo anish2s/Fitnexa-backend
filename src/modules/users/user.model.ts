@@ -19,7 +19,7 @@ const userSchema = new Schema(
     phone: { type: String, trim: true, match: /^\+[1-9]\d{7,14}$/ },
     passwordHash: { type: String, select: false },
     role: { type: String, enum: USER_ROLES, required: true },
-    /** For role=member: the member record (members collection, Milestone 4). */
+    /** For role=member: the member record (members collection). */
     memberId: { type: Schema.Types.ObjectId, ref: 'Member' },
     /** Extra permissions for staff; filtered against STAFF_GRANTABLE when evaluated. */
     permissions: { type: [String], default: [] },

@@ -45,7 +45,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] `authorize(permission)` with role → permission map and limited staff grants
 - [x] Login rate limits (IP+gym, IP+gym+account) + account lockout
 - [x] CORS tightened to same-gym origins; CSRF guard on cookie endpoints
-- [x] Mailer interface (dev log + test memory transports; real provider pending)
+- [x] Mailer interface (dev log + test memory transports; Resend transport added in M4)
 - [x] Seed (2 demo gyms, owner, staff, 3 members each, super admin), `admin:create`, `db:indexes`
 - [x] 143 tests passing on real MongoDB; typecheck, lint, build; end-to-end smoke test of the compiled server
 
@@ -108,14 +108,13 @@ depend on the backend.
   scope; failed closed, no leak) — fixed. M2 built: 143 tests passing, compiled server smoke-tested
   with curl (owner login, cross-gym token rejected, refresh, member email link, super admin).
   M3 built: gym management console API, owner settings, audit log, audited impersonation.
-  172 tests passing (29 new). Not yet smoke-tested against the compiled server.
+  172 tests passing (29 new).
 - **2026-11-17** — Owner decisions: Resend, 1-year audit retention, app-level append-only accepted.
   Added 1-year TTL on audit logs, Resend transport, and fixed a latent account-enumeration path
   (provider errors would have turned 202 into 500 only for registered emails). 181 tests passing.
 - **2026-11-17** — M4 built in four commits: staff, members (+ member self-profile, consent, login
   sync, per-gym codes), Cloudinary signed uploads, CSV import; plus a cross-tenant suite over every
   model. 232 tests passing. Blocked on owner: Resend key + domain, Cloudinary credentials.
-  Not yet smoke-tested against the compiled server (M3, M4).
   Dev machine moved to Node 22.23.5 (nvm default) and `.npmrc` `engine-strict=true` added, so npm
   refuses to install on an older Node. 232 tests pass on Node 22.
 - **2026-11-17** — M5: plans (GST inclusive/exclusive/none) and memberships (sell, renew, cancel,
@@ -124,3 +123,8 @@ depend on the backend.
   another collection could read other gyms' rows. Nothing used joins before M5, so no data was
   exposed. Joins are now scoped automatically, with a real-DB test that fails without the fix.
   260 tests passing.
+- **2026-11-17** — M1–M5 review: smoke-tested the compiled server (`dist/`) over real HTTP against a
+  fresh MongoDB replica set with the real seed: 36/36 checks across M1–M5 (host routing, logins,
+  cross-gym token refusal, email link, gym creation + invite, impersonation, suspension, audit log,
+  staff, members, CSV import, uploads-not-configured, plans in months, sell/overlap/renew/expiring,
+  isolation, no secrets in logs). Only open M1–M5 items: live Resend and Cloudinary (credentials).

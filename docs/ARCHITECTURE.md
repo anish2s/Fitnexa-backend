@@ -1,6 +1,6 @@
 # Architecture
 
-_Last updated: 2026-11-12 · Phase 1, Milestone 1_
+_Last updated: 2026-11-17 · Phase 1, Milestone 5_
 
 ## 1. Whiteboard assessment
 
@@ -13,15 +13,15 @@ sensible postpone list. The gaps below are the things that would bite during the
 | # | Gap | Why it matters | Resolution |
 |---|-----|----------------|------------|
 | 1 | **Where the API lives relative to gym subdomains** | If the API is `api.yourapp.in`, the Host header no longer identifies the gym. | API is served **same-origin** under `/api` on every gym host (`powerhouse.yourapp.in/api/...`). Tenant comes from the host; auth cookies stay host-only. See §3. |
-| 2 | **Member login method** | Indian gym members rarely use email; SMS OTP needs DLT registration and per-message cost. | **Open question for you** (see PROGRESS.md). |
+| 2 | **Member login method** | Indian gym members rarely use email; SMS OTP needs DLT registration and per-message cost. | **Decided 2026-11-13: one-time email link** (Resend). Members without email are managed by the front desk without app access. ✅ M2/M4 |
 | 3 | **Two different Razorpay flows** | The whiteboard says "you bill each gym monthly" (platform billing). Members paying *their gym* online is a separate flow and needs money to land in the **gym's** account. | MVP: gyms record cash/UPI/card at the desk. Member online payments use the gym's own Razorpay keys (stored encrypted) behind a feature flag. Platform billing stays manual (Razorpay payment links) until ~10 gyms. |
-| 4 | **Member import** | Onboarding step 2 ("import from Excel or register book") has no API in the module list. "New gym live in under 1 day" depends on it. | CSV import endpoint with dry-run + error report, added to Milestone 4. |
+| 4 | **Member import** | Onboarding step 2 ("import from Excel or register book") has no API in the module list. "New gym live in under 1 day" depends on it. | CSV import endpoint with dry-run + per-row error report, all-or-nothing. ✅ M4 |
 | 5 | **Receipt numbering** | GST-style receipts need gap-free, per-gym, per-financial-year sequences. | `counters` collection with atomic `$inc` inside the payment transaction. |
 | 6 | **Idempotent payments** | Double-tap on "Record payment" or webhook retries create duplicate payments. | `Idempotency-Key` header + unique index; Razorpay ids unique per tenant. |
 | 7 | **Job safety** | node-cron in-process runs the job once **per instance**; two instances = duplicate reminders. | Mongo lease lock (`jobLocks`) per job run. No Redis needed. |
-| 8 | **"Log in as owner (audited)"** | Impersonation is a privilege-escalation path if done casually. | Short-lived impersonation session, separate claim, banner in UI, every action audited with both actor ids. Milestone 3. |
+| 8 | **"Log in as owner (audited)"** | Impersonation is a privilege-escalation path if done casually. | Short-lived impersonation session, separate claim, banner in UI, every action audited with both actor ids. ✅ M3 |
 | 9 | **Time zones** | "Today's attendance", "expires today" must use the gym's day (IST), not UTC. | `settings.timezone` per gym; attendance stores a precomputed local `day`. |
-| 10 | **DPDP Act operations** | Risk table says "record consent, export and delete on request" but no component does it. | Consent fields on members, export + erase endpoints (Milestone 9). |
+| 10 | **DPDP Act operations** | Risk table says "record consent, export and delete on request" but no component does it. | Consent recorded at registration ✅ M4; export + erase endpoints (Milestone 9). |
 | 11 | **Backups / observability** | Not on the board. | Atlas continuous backup; structured logs with request ids now; error tracking (Sentry free tier) at deploy time. |
 | 12 | **Frontend tech mismatch** | Whiteboard says "React PWA"; brief says Next.js. | Following the brief: Next.js for both apps (Phase 2/3). |
 
@@ -111,8 +111,8 @@ gym-saas-api/
 │   ├── server.ts         # process entry: env, DB, listen, graceful shutdown
 │   ├── config/           # env schema (zod)
 │   ├── db/               # connection
-│   ├── lib/              # errors, response envelope, logger
-│   ├── middleware/       # cors, validate, error handler (auth/rbac in M2)
+│   ├── lib/              # errors, response envelope, logger, money, dates, csv, mailer, image store
+│   ├── middleware/       # cors, validate, error handler, authenticate/authorize
 │   ├── tenancy/          # host parsing, resolver, context, tenant-scope plugin
 │   └── modules/          # feature modules: routes · controller · service · model · schemas
 │       ├── health/
