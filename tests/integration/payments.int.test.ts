@@ -328,4 +328,41 @@ describeWithDb('payments (real MongoDB)', () => {
     });
     expect(res.body.data.receiptNumber).toMatch(new RegExp(`^PHF/${FY()}/`));
   });
+
+  // ---------------------------------------------------------------- receipts
+  it('PDF receipts: staff and owner for any payment; a member only for their own', async () => {
+    const res = await pay(await membershipOf('powerhouse', ARJUN), {
+      amountPaise: 1000,
+      method: 'cash',
+    });
+    const id = res.body.data.id as string;
+
+    const pdf = await call('get', PH, `/payments/${id}/receipt`, desk).buffer(true);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(pdf.headers['content-disposition']).toMatch(
+      /^inline; filename="receipt-RCPT-\d{4}-\d{2}-\d{4}\.pdf"$/,
+    );
+    expect(pdf.headers['cache-control']).toBe('no-store');
+    expect(
+      Buffer.from(pdf.body as Buffer)
+        .subarray(0, 5)
+        .toString(),
+    ).toBe('%PDF-');
+
+    const arjun = await memberToken(PH, 'arjun@member.demo');
+    expect((await call('get', PH, `/members/me/payments/${id}/receipt`, arjun)).status).toBe(200);
+    // Not their payment → indistinguishable from missing.
+    const vikramPayment = (
+      await call('get', PH, `/members/${await memberId('powerhouse', VIKRAM)}/payments`, desk)
+    ).body.data[0].id;
+    expect(
+      (await call('get', PH, `/members/me/payments/${vikramPayment}/receipt`, arjun)).status,
+    ).toBe(404);
+    expect((await call('get', PH, `/payments/${id}/receipt`, arjun)).status).toBe(403);
+    expect((await call('get', PH, `/payments/${id}/receipt`)).status).toBe(401);
+
+    const fzOwner = await tokenFor(FZ, 'owner@fitzone.demo');
+    expect((await call('get', FZ, `/payments/${id}/receipt`, fzOwner)).status).toBe(404);
+  });
 });

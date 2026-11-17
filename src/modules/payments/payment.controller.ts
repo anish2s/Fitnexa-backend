@@ -21,6 +21,18 @@ export function idempotencyKeyOf(req: Request): string {
   return parsed.data;
 }
 
+function sendPdf(res: Response, r: { receiptNumber: string; pdf: Buffer }) {
+  const file = `receipt-${r.receiptNumber.replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`;
+  res
+    .status(200)
+    .set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${file}"`,
+      'Cache-Control': 'no-store',
+    })
+    .send(r.pdf);
+}
+
 export function createPaymentController(payments: PaymentService) {
   const idOf = (req: Request) => (req.valid.params as { id: string }).id;
   const noStore = (res: Response) => res.set('Cache-Control', 'no-store');
@@ -48,6 +60,12 @@ export function createPaymentController(payments: PaymentService) {
     async forMember(req: Request, res: Response) {
       noStore(res);
       ok(res, await payments.forMember(idOf(req)));
+    },
+    async receipt(req: Request, res: Response) {
+      sendPdf(res, await payments.receipt(idOf(req)));
+    },
+    async selfReceipt(req: Request, res: Response) {
+      sendPdf(res, await payments.selfReceipt(req.auth!.userId, idOf(req)));
     },
     async selfPayments(req: Request, res: Response) {
       noStore(res);

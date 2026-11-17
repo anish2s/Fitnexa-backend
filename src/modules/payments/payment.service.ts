@@ -9,7 +9,10 @@ import {
   toMembershipView,
   type LeanMembership,
 } from '../memberships/membership.service.js';
+import { Tenant } from '../tenants/tenant.model.js';
 import { User } from '../users/user.model.js';
+import { requireTenantId } from '../../tenancy/context.js';
+import { renderReceiptPdf, type ReceiptData } from './receipt.pdf.js';
 import {
   gymPaymentSettings,
   insertPayment,
@@ -181,7 +184,82 @@ export function createPaymentService(deps: { audit: AuditService }) {
     return rows.map((p) => toPaymentView(p, { forMember: true }));
   }
 
-  return { record, get, list, forMember, selfPayments };
+  /** Everything the receipt needs, read inside the gym's scope. */
+  async function receiptData(p: LeanPayment): Promise<ReceiptData> {
+    const [gym, member, ms] = await Promise.all([
+      Tenant.findById(requireTenantId()).lean(),
+      Member.findById(p.memberId).select('name memberCode phone').lean(),
+      Membership.findById(p.membershipId).lean<LeanMembership>(),
+    ]);
+    if (!gym || !member || !ms) throw Errors.notFound('Payment');
+    const tz = gym.settings?.timezone ?? 'Asia/Kolkata';
+    const when = new Intl.DateTimeFormat('en-IN', {
+      timeZone: tz,
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(p.receivedAt);
+    const day = (d: Date) =>
+      new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'UTC',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }).format(d);
+    const a = gym.address ?? {};
+    return {
+      gym: {
+        name: gym.name,
+        address: [
+          [a.line1, a.line2].filter(Boolean).join(', '),
+          [a.city, a.state, a.postalCode].filter(Boolean).join(', '),
+        ].filter(Boolean),
+        phone: gym.phone,
+        email: gym.email,
+        gstin: gym.settings?.gstin,
+      },
+      receiptNumber: p.receiptNumber,
+      receivedAtText: when,
+      member: { name: member.name, memberCode: member.memberCode, phone: member.phone },
+      membership: {
+        planName: ms.plan.name,
+        periodText: `${day(ms.startDate)} to ${day(ms.endDate)}`,
+        pricePaise: ms.plan.pricePaise,
+        discountPaise: ms.discountPaise,
+        basePaise: ms.basePaise,
+        gstPaise: ms.gstPaise,
+        gstRate: ms.plan.gstRate,
+        totalPaise: ms.totalPaise,
+        paidPaise: ms.paidPaise ?? 0,
+      },
+      payment: {
+        amountPaise: p.amountPaise,
+        method: p.method,
+        reference: p.reference,
+        refundedPaise: p.refundedPaise ?? 0,
+      },
+    };
+  }
+
+  async function receipt(id: string) {
+    const p = await Payment.findById(id).lean<LeanPayment>();
+    if (!p) throw Errors.notFound('Payment');
+    return { receiptNumber: p.receiptNumber, pdf: await renderReceiptPdf(await receiptData(p)) };
+  }
+
+  /** A member's own receipt: the payment must belong to the signed-in member. */
+  async function selfReceipt(userId: string, id: string) {
+    const user = await User.findOne({ _id: userId, role: 'member' }).select('memberId').lean();
+    const p = user?.memberId
+      ? await Payment.findOne({ _id: id, memberId: user.memberId }).lean<LeanPayment>()
+      : null;
+    if (!p) throw Errors.notFound('Payment');
+    return { receiptNumber: p.receiptNumber, pdf: await renderReceiptPdf(await receiptData(p)) };
+  }
+
+  return { record, get, list, forMember, selfPayments, receipt, selfReceipt };
 }
 
 export type PaymentService = ReturnType<typeof createPaymentService>;

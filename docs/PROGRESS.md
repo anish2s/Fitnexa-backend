@@ -71,7 +71,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 ### M6 — Payments & receipts
 - [x] Cash / UPI / card / bank transfer recording; required Idempotency-Key (replay, conflict on reuse, race-safe); sell + collect in one transaction
 - [x] Receipt numbering per gym per Indian FY, gap-free (counter in the payment transaction)
-- [ ] PDF receipt
+- [x] PDF receipt (staff + member's own), CGST/SGST split; content verified by decoding the PDF text in tests
 - [x] Partial payments / balance due / payment status / dues list; atomic no-overpay guard (5 parallel → 2 accepted)
 - [ ] Razorpay order + verification + webhooks (test keys), refunds
 - [x] Transactions for payment + membership + counter

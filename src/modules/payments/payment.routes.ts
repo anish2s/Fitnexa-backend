@@ -24,6 +24,7 @@ export function paymentRouters(deps: { jwt: JwtConfig; audit: AuditService }) {
   const payments = Router();
   payments.get('/', auth, read, validate({ query: s.paymentListQuery }), c.list);
   payments.get('/:id', auth, read, validate({ params: s.paymentIdParams }), c.get);
+  payments.get('/:id/receipt', auth, read, validate({ params: s.paymentIdParams }), c.receipt);
 
   const perMembership = Router();
   perMembership.post(
@@ -36,6 +37,13 @@ export function paymentRouters(deps: { jwt: JwtConfig; audit: AuditService }) {
 
   const perMember = Router();
   perMember.get('/me/payments', auth, authorize('self:read'), c.selfPayments);
+  perMember.get(
+    '/me/payments/:id/receipt',
+    auth,
+    authorize('self:read'),
+    validate({ params: s.paymentIdParams }),
+    c.selfReceipt,
+  );
   perMember.get('/:id/payments', auth, read, validate({ params: memberIdParams }), c.forMember);
 
   return { payments, perMembership, perMember };

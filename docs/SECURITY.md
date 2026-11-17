@@ -157,3 +157,6 @@ Notes for the frontend (Phase 2/3):
 10. Uploads: file size isn't capped by the signature (Cloudinary's free plan caps images at 10 MB).
     If needed, add an upload preset with a size limit. A client could also confirm a signed id it
     never uploaded; the result is just a broken image for that member, inside that gym.
+11. Receipts are "payment receipts". Whether they also meet GST **tax invoice** requirements (fields,
+    SAC code, numbering rules, B2B details) must be confirmed by the gym's CA before relying on them
+    for GST filing. Changing the layout is cheap; tell us what the CA asks for.

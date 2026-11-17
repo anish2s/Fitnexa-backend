@@ -305,6 +305,8 @@ or member is `409`. Generate a new key per intended payment, reuse it only for r
 | `GET /payments/:id` | — | payment with `membership` |
 | `GET /members/:id/payments` | — | that member's payments |
 | `GET /members/me/payments` | `self:read` (member) | own payments, without staff fields |
+| `GET /payments/:id/receipt` | — | **PDF receipt** (`application/pdf`, inline, `receipt-RCPT-2026-27-0042.pdf`) |
+| `GET /members/me/payments/:id/receipt` | `self:read` (member) | own PDF receipt; someone else's is `404` |
 | `GET /memberships?due=true` | — | memberships (not cancelled) with money owed |
 
 Payment: `{ id, receiptNumber, financialYear, memberId, membershipId, amountPaise, refundedPaise, method,
@@ -318,6 +320,10 @@ reference, receivedAt, receivedBy, notes, gateway, createdAt }`.
 - **Receipt numbers**: `<receiptPrefix>/<financial year>/<4+ digits>`, e.g. `RCPT/2026-27/0042`.
   Per gym, per Indian financial year (April–March, by the gym's local date of `receivedAt`).
   Allocated inside the payment's transaction: unique and gap-free, a failed payment uses no number.
+- **Receipt PDF** (A5): gym name/address/GSTIN, receipt no. and date (gym time zone), member, plan
+  and period, price, discount, taxable value, CGST + SGST at half the rate each (odd paisa to SGST,
+  only when the gym charges GST), total, this payment and mode/reference, paid to date, balance due.
+  Amounts print as `Rs. 1,500.00` (standard PDF fonts have no ₹ glyph).
 
 ## Image uploads — `/api/v1/uploads` (gym host)
 
