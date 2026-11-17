@@ -35,6 +35,13 @@ export function createMemberController(members: MemberService) {
         await members.update(idOf(req), req.valid.body as UpdateMemberInput, auditContextFrom(req)),
       );
     },
+    async setPhoto(req: Request, res: Response) {
+      const { publicId } = req.valid.body as { publicId: string };
+      ok(res, await members.setPhoto(idOf(req), publicId, auditContextFrom(req)));
+    },
+    async removePhoto(req: Request, res: Response) {
+      ok(res, await members.setPhoto(idOf(req), null, auditContextFrom(req)));
+    },
     async archive(req: Request, res: Response) {
       ok(res, await members.archive(idOf(req), auditContextFrom(req)));
     },

@@ -87,6 +87,25 @@ export const envSchema = z
     /** Must be an address on a domain verified in the provider, e.g. `Gym App <no-reply@yourapp.in>`. */
     MAIL_FROM: z.string().trim().min(3).default('Gym App <no-reply@localhost>'),
     RESEND_API_KEY: z.string().trim().optional(),
+
+    // --- Image uploads (Cloudinary). All three or none; without them uploads answer 503. ---
+    CLOUDINARY_CLOUD_NAME: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9_-]{1,64}$/i, 'Invalid Cloudinary cloud name')
+      .optional(),
+    CLOUDINARY_API_KEY: z
+      .string()
+      .trim()
+      .regex(/^\d{6,32}$/, 'Invalid Cloudinary API key')
+      .optional(),
+    CLOUDINARY_API_SECRET: z.string().trim().min(10).optional(),
+    /** Top-level folder, so dev and production uploads never mix in one Cloudinary account. */
+    CLOUDINARY_FOLDER: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9_-]{1,40}$/, 'Lowercase letters, digits, _ and - only')
+      .default('gym-saas-dev'),
   })
   .transform((env) => ({
     ...env,
@@ -115,6 +134,18 @@ export const envSchema = z
         code: 'custom',
         path: ['RESEND_API_KEY'],
         message: 'MAIL_TRANSPORT=resend needs RESEND_API_KEY (starts with re_)',
+      });
+    }
+    const cloudinary = [
+      env.CLOUDINARY_CLOUD_NAME,
+      env.CLOUDINARY_API_KEY,
+      env.CLOUDINARY_API_SECRET,
+    ].filter(Boolean).length;
+    if (cloudinary !== 0 && cloudinary !== 3) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CLOUDINARY_API_SECRET'],
+        message: 'Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET together',
       });
     }
     if (env.MAIL_TRANSPORT === 'resend' && /@localhost\b/i.test(env.MAIL_FROM)) {

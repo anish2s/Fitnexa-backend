@@ -27,6 +27,8 @@ export const Errors = {
   notFound: (entity = 'Resource') => new AppError(404, 'NOT_FOUND', `${entity} not found`),
   conflict: (message: string, details?: unknown) => new AppError(409, 'CONFLICT', message, details),
   tenantNotFound: () => new AppError(404, 'TENANT_NOT_FOUND', 'Gym not found'),
+  uploadsNotConfigured: () =>
+    new AppError(503, 'UPLOADS_NOT_CONFIGURED', 'Image uploads are not configured yet'),
   tenantRequired: () =>
     new AppError(400, 'TENANT_REQUIRED', 'This endpoint must be called on a gym domain'),
   tenantSuspended: () =>

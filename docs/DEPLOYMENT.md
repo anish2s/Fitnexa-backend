@@ -44,6 +44,13 @@ Never run `npm run seed` against production (it refuses).
 `JWT_ACCESS_SECRET` (`openssl rand -base64 48`), `MONGODB_URI`, `RESEND_API_KEY`. Changing `JWT_ACCESS_SECRET`
 signs everyone out within 15 minutes (their refresh still works and issues new tokens).
 
+## Image uploads (Cloudinary)
+Optional at boot: without credentials, upload endpoints return `503 UPLOADS_NOT_CONFIGURED`.
+1. Create a Cloudinary account (free plan is enough for the pilot).
+2. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (all three) and
+   `CLOUDINARY_FOLDER=gym-saas-prod` (dev defaults to `gym-saas-dev`, so the two never mix).
+No upload preset or CORS setup is needed: uploads are signed per request.
+
 ## Email (Resend)
 Production refuses to start without a real email provider, because members sign in by email link.
 Provider: **Resend** (owner's choice, 2026-11-17), free plan (100 emails/day, 3,000/month).

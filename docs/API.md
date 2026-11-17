@@ -26,6 +26,7 @@ Every response carries `X-Request-Id`.
 | 404 | `NOT_FOUND`, `ROUTE_NOT_FOUND`, `TENANT_NOT_FOUND` | unknown and archived gyms are indistinguishable |
 | 409 | `CONFLICT`, `DUPLICATE` | duplicate values are never echoed back |
 | 413 | `PAYLOAD_TOO_LARGE` | body > 100 kb |
+| 503 | `UPLOADS_NOT_CONFIGURED` | Cloudinary credentials not set |
 | 422 | `VALIDATION_ERROR` | `details: [{ path, message }]` |
 | 429 | `RATE_LIMITED`, `LOGIN_LOCKED` | |
 | 500 | `INTERNAL_ERROR` | no internals exposed |
@@ -156,7 +157,8 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `tenant.update`, `tenant.branding_update`, `tenant.suspend`, `tenant.activate`, `tenant.owner_invite`,
 `impersonation.start`, `impersonation.end`, `staff.create`, `staff.update`,
 `staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`, `member.create`,
-`member.update`, `member.self_update`, `member.archive`, `member.restore`. Member names, birth dates,
+`member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
+`member.photo_remove`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -210,6 +212,23 @@ same gym with the same email (`409 DUPLICATE`).
 
 Member detail: `{ id, memberCode, name, phone, email, gender, dateOfBirth, joinDate,
 emergencyContact, photoUrl, notes, consent{ at, version }, appAccess, archivedAt, createdAt, updatedAt }`.
+
+## Image uploads — `/api/v1/uploads` (gym host)
+
+Images go straight from the browser to Cloudinary; the API only signs the upload.
+
+1. `POST /uploads/signature` with `{ purpose: "member_photo", memberId }` (`members:update`) or
+   `{ purpose: "gym_logo" | "gym_icon" }` (`branding:update`). Response:
+   `{ uploadUrl, fields{ api_key, timestamp, public_id, allowed_formats, overwrite, signature }, publicId, deliveryUrl, expiresAt }`.
+2. Browser: `POST uploadUrl` as `multipart/form-data` with every entry of `fields` plus `file`.
+   Formats: jpg, jpeg, png, webp. The signature is valid for one hour.
+3. Confirm:
+   - member photo: `PUT /members/:id/photo { publicId }` → member detail with `photoUrl`;
+     `DELETE /members/:id/photo` removes it. Replacing or removing deletes the old image from Cloudinary.
+   - logo / icon: `PATCH /gym/branding { logoUrl | appIconUrl: deliveryUrl }`.
+
+`publicId` must be one the API could have issued for that member in this gym, otherwise `422`.
+Without Cloudinary credentials these endpoints answer `503 UPLOADS_NOT_CONFIGURED`.
 
 ## Super admin console — `/api/v1/platform` (platform host, super admin only)
 

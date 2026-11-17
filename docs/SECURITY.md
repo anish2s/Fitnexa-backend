@@ -96,6 +96,10 @@ Notes for the frontend (Phase 2/3):
 | DPDP consent captured at registration with time, wording version and recorder | ✅ |
 | Staff notes never returned to the member | ✅ |
 | Audit log masks member names, birth dates, notes, emergency contacts, email, phone | ✅ |
+| Uploads: the server picks the image path (gym folder + member + random name) and the signature binds it, so clients can't write into another gym's or member's space; `overwrite=false`; jpg/png/webp only | ✅ |
+| Photo confirmation accepts only ids under this gym + member prefix with the issued name shape (no traversal) | ✅ |
+| Cloudinary secret never returned; image bytes never pass through the API | ✅ |
+| Live upload against Cloudinary | 🟡 blocked: needs credentials |
 
 ## Email ✅ (transport) · 🟡 (live delivery)
 
@@ -142,3 +146,6 @@ Notes for the frontend (Phase 2/3):
 9. Resend free plan caps mail at 100/day. A burst of sign-in links past that is refused until the
    next day; members would see no email. Monitor `Email could not be sent` in the logs; upgrade the
    plan before onboarding more than a few gyms.
+10. Uploads: file size isn't capped by the signature (Cloudinary's free plan caps images at 10 MB).
+    If needed, add an upload preset with a size limit. A client could also confirm a signed id it
+    never uploaded; the result is just a broken image for that member, inside that gym.

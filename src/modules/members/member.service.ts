@@ -1,5 +1,6 @@
 import mongoose, { Types, type ClientSession } from 'mongoose';
 import { Errors } from '../../lib/errors.js';
+import type { ImageStore } from '../../lib/image-store.js';
 import { formatDateOnly, parseDateOnly, todayIn } from '../../lib/dates.js';
 import { escapeRegex, pageMeta, skipFor } from '../../lib/pagination.js';
 import { requireTenantId } from '../../tenancy/context.js';
@@ -41,6 +42,7 @@ type LeanMember = {
   emergencyContact?: { name?: string; phone?: string; relation?: string } | null;
   notes?: string | null;
   photoUrl?: string | null;
+  photoPublicId?: string | null;
   consent?: { at: Date; version: string } | null;
   userId?: Types.ObjectId | null;
   archivedAt?: Date | null;
@@ -89,8 +91,8 @@ function toSelfView(m: LeanMember) {
  * Members of the host gym. Every query runs in the request's tenant scope. The linked login
  * (`users`, role member) is kept in step with the member record inside the same transaction.
  */
-export function createMemberService(deps: { audit: AuditService }) {
-  const { audit } = deps;
+export function createMemberService(deps: { audit: AuditService; images: ImageStore | null }) {
+  const { audit, images } = deps;
 
   async function gymToday(): Promise<Date> {
     const t = await Tenant.findById(requireTenantId()).select('settings.timezone').lean();
@@ -313,6 +315,46 @@ export function createMemberService(deps: { audit: AuditService }) {
     return toDetail(await applyPatch({ _id: id }, picked, ctx, 'member.update'));
   }
 
+  /**
+   * Sets (publicId) or removes (null) the member's photo. Only ids under this gym's folder for this
+   * member are accepted: those are the only paths /uploads/signature will sign for them.
+   */
+  async function setPhoto(id: string, publicId: string | null, ctx: AuditContext) {
+    if (!images) throw Errors.uploadsNotConfigured();
+    const before = await load(id);
+    if (before.archivedAt) throw Errors.conflict('Member is archived; restore them first');
+    if (publicId !== null) {
+      const prefix = `${images.gymPrefix(requireTenantId().toHexString())}/members/${id}/`;
+      if (
+        !publicId.startsWith(prefix) ||
+        !/^[A-Za-z0-9]{16}$/.test(publicId.slice(prefix.length))
+      ) {
+        throw Errors.validation([
+          { path: 'publicId', message: 'Not an upload issued for this member' },
+        ]);
+      }
+    }
+    const after = await Member.findOneAndUpdate(
+      { _id: id },
+      publicId === null
+        ? { $unset: { photoUrl: 1, photoPublicId: 1 } }
+        : {
+            $set: {
+              photoPublicId: publicId,
+              photoUrl: images.deliveryUrl(publicId, 'member_photo'),
+            },
+          },
+      { returnDocument: 'after' },
+    ).lean<LeanMember>();
+    const old = before.photoPublicId;
+    if (old && old !== publicId) await images.destroy(old);
+    await audit.record(ctx, {
+      action: publicId === null ? 'member.photo_remove' : 'member.photo_update',
+      target: { type: 'member', id },
+    });
+    return toDetail(after!);
+  }
+
   async function setArchived(id: string, archive: boolean, ctx: AuditContext) {
     const before = await load(id);
     if (Boolean(before.archivedAt) === archive) {
@@ -368,6 +410,7 @@ export function createMemberService(deps: { audit: AuditService }) {
     restore: (id: string, ctx: AuditContext) => setArchived(id, false, ctx),
     getSelf,
     updateSelf,
+    setPhoto,
   };
 }
 

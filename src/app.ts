@@ -6,6 +6,7 @@ import { pinoHttp } from 'pino-http';
 import type { Env } from './config/env.js';
 import type { JwtConfig } from './auth/jwt.js';
 import type { Logger } from './lib/logger.js';
+import { createImageStore, type ImageStore } from './lib/image-store.js';
 import type { Mailer } from './lib/mailer.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
@@ -18,6 +19,7 @@ import { platformRouter } from './modules/platform/platform.routes.js';
 import { createPlatformService } from './modules/platform/platform.service.js';
 import { memberRouter } from './modules/members/member.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
+import { uploadRouter } from './modules/uploads/upload.routes.js';
 import { gymRouter } from './modules/tenants/gym.routes.js';
 import { publicTenantRouter } from './modules/tenants/public.routes.js';
 import { resolveTenant, type TenantLookup } from './tenancy/resolver.middleware.js';
@@ -28,6 +30,8 @@ export interface AppDeps {
   tenantLookup: TenantLookup;
   isDbReady: () => boolean;
   mailer: Mailer;
+  /** Defaults to Cloudinary from env; `null` = uploads not configured. Tests inject a fake. */
+  images?: ImageStore | null;
 }
 
 /**
@@ -101,6 +105,7 @@ export function createApp(deps: AppDeps) {
   const audit = createAuditService({ logger });
   const auth = createAuthService({ env, mailer: deps.mailer, logger, audit });
   const platform = createPlatformService({ env, auth, audit, logger });
+  const images = deps.images === undefined ? createImageStore(env, logger) : deps.images;
 
   const v1 = express.Router();
   v1.use('/public', publicTenantRouter());
@@ -108,7 +113,8 @@ export function createApp(deps: AppDeps) {
   v1.use('/gym', gymRouter({ jwt, audit }));
   v1.use('/audit-logs', auditRouter({ jwt, audit }));
   v1.use('/staff', staffRouter({ jwt, auth, audit }));
-  v1.use('/members', memberRouter({ jwt, audit }));
+  v1.use('/members', memberRouter({ jwt, audit, images }));
+  v1.use('/uploads', uploadRouter({ jwt, images }));
   v1.use('/platform', platformRouter({ jwt, platform, audit }));
   app.use('/api/v1', v1);
 
