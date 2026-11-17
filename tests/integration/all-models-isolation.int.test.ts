@@ -10,7 +10,7 @@ import { FZ, PH, gymId, intApp, resetDemo } from '../helpers/int.js';
  *
  * Adding a model? Put it in one of these lists. A gym-owned model must use tenantScopePlugin.
  */
-const TENANT_SCOPED = ['AuditLog', 'AuthToken', 'Counter', 'Member', 'Session', 'User'];
+const TENANT_SCOPED = ['AuditLog', 'AuthToken', 'Counter', 'Member', 'Plan', 'Session', 'User'];
 const PLATFORM_ONLY = ['PlatformAdmin', 'PlatformAuditLog', 'PlatformSession', 'Tenant'];
 
 const { mailer, call, tokenFor } = intApp();

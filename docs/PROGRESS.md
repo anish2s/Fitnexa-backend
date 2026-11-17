@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–4 complete and verified against a real MongoDB 8.0 (live email and image upload blocked on credentials). Milestone 5 next.**
+**Phase 1 — Backend. Milestones 1–4 complete and verified against a real MongoDB 8.0 (live email and image upload blocked on credentials). Milestone 5 in progress.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -64,7 +64,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Cross-tenant suite for **every** model: classifies all models (a new unscoped model fails CI), checks every index starts with `tenantId`, and proves FitZone can't list/count/fetch/aggregate/update/delete Powerhouse rows in any collection
 
 ### M5 — Plans & memberships
-- [ ] Plans CRUD (days, price, GST inclusive/exclusive)
+- [x] Plans CRUD + archive/restore (days, integer-paise price, GST inclusive/exclusive/none at 0/5/12/18/28%, GST only with a GSTIN, unique live names); 8 integration + 6 money unit tests
 - [ ] Assign, renew (from expiry or today), cancel, history; derived status; expiring-soon queries
 
 ### M6 — Payments & receipts

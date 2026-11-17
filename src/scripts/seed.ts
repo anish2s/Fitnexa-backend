@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import mongoose, { Types } from 'mongoose';
 import { hashPassword } from '../auth/password.js';
-import { Member, PlatformAdmin, Tenant, User } from '../db/models.js';
+import { Member, Plan, PlatformAdmin, Tenant, User } from '../db/models.js';
 import { nextSequence } from '../modules/counters/counter.model.js';
 import { MEMBER_CONSENT_VERSION } from '../modules/members/member.model.js';
 import { formatMemberCode } from '../modules/members/member.service.js';
@@ -23,10 +23,19 @@ interface DemoGym {
   primaryColor: string;
   defaultTheme: 'dark' | 'light';
   city: string;
+  /** Sample GSTIN (from GST documentation), so one demo gym charges GST and one doesn't. */
+  gstin?: string;
   owner: { name: string; email: string; phone: string };
   staff: { name: string; email: string; phone: string };
   members: { name: string; email?: string; phone: string }[];
 }
+
+/** name, days, price in rupees (incl. GST where the gym charges it). */
+export const DEMO_PLANS: [string, number, number][] = [
+  ['Monthly', 30, 1500],
+  ['Quarterly', 90, 4000],
+  ['Annual', 365, 12000],
+];
 
 export const DEMO_GYMS: DemoGym[] = [
   {
@@ -35,6 +44,7 @@ export const DEMO_GYMS: DemoGym[] = [
     primaryColor: '#E11D48',
     defaultTheme: 'dark',
     city: 'Pune',
+    gstin: '27AAPFU0939F1ZV',
     owner: { name: 'Rahul Mehta', email: 'owner@powerhouse.demo', phone: '+919800000001' },
     staff: { name: 'Sneha Patil', email: 'desk@powerhouse.demo', phone: '+919800000002' },
     members: [
@@ -96,6 +106,7 @@ export async function seedDemo(
       email: g.owner.email,
       phone: g.owner.phone,
       address: { city: g.city, country: 'IN' },
+      settings: g.gstin ? { gstin: g.gstin } : {},
       branding: { primaryColor: g.primaryColor, defaultTheme: g.defaultTheme },
       subscription: { status: 'trialing', planCode: 'pilot', priceMonthlyPaise: 99_900 },
     });
@@ -104,6 +115,18 @@ export async function seedDemo(
         { ...g.owner, role: 'owner' as const, passwordHash },
         { ...g.staff, role: 'staff' as const, passwordHash },
       ]);
+      const tax = g.gstin
+        ? { taxMode: 'inclusive' as const, gstRate: 18 as const }
+        : { taxMode: 'none' as const, gstRate: 0 as const };
+      for (const [name, durationDays, rupees] of DEMO_PLANS) {
+        await Plan.create({
+          name,
+          nameKey: name.toLowerCase(),
+          durationDays,
+          pricePaise: rupees * 100,
+          ...tax,
+        });
+      }
       // Member record + (with an email) a linked member login, as the members API creates them.
       for (const m of g.members) {
         const memberId = new Types.ObjectId();

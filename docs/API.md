@@ -159,7 +159,7 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `impersonation.start`, `impersonation.end`, `staff.create`, `staff.update`,
 `staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`, `member.create`,
 `member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
-`member.photo_remove`, `member.import`. Member names, birth dates,
+`member.photo_remove`, `member.import`, `plan.create`, `plan.update`, `plan.archive`, `plan.restore`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -231,6 +231,27 @@ report in `error.details` and writes nothing. A clean real import returns `201`.
 
 Member detail: `{ id, memberCode, name, phone, email, gender, dateOfBirth, joinDate,
 emergencyContact, photoUrl, notes, consent{ at, version }, appAccess, archivedAt, createdAt, updatedAt }`.
+
+## Plans — `/api/v1/plans` (gym host)
+
+Reading needs `plans:read` (owner, staff); changes need `plans:manage` (owner; grantable to staff).
+
+| Method & path | Body / query | Result |
+|---|---|---|
+| `GET /plans` | `?archived=true|false&page&limit` | plans, shortest first |
+| `GET /plans/:id` | — | plan |
+| `POST /plans` | `{ name, durationDays (1–1095), pricePaise, description?, taxMode?, gstRate? }` | `201` plan |
+| `PATCH /plans/:id` | any of the above (`description: null` clears) | plan. `409` if archived. |
+| `POST /plans/:id/archive` · `/restore` | — | plan. Archived plans can't be sold; restoring can clash on name (`409`). |
+
+Plan: `{ id, name, description, durationDays, pricePaise, taxMode: inclusive|exclusive|none, gstRate: 0|5|12|18|28, breakdown{ basePaise, gstPaise, totalPaise }, archivedAt, createdAt, updatedAt }`.
+
+- `inclusive`: price contains GST (₹1,500 at 18% = ₹1,271.19 + ₹228.81). `exclusive`: GST is added on
+  top. `none`: no GST.
+- Default: `inclusive` at 18% if the gym has a GSTIN in settings, otherwise `none`. A gym without a
+  GSTIN can't create GST plans (`422`).
+- Live plan names are unique per gym, ignoring case.
+- Editing a plan changes future sales only; memberships keep the price they were sold at.
 
 ## Image uploads — `/api/v1/uploads` (gym host)
 

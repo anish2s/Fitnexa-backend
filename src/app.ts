@@ -18,6 +18,7 @@ import { healthRouter } from './modules/health/health.routes.js';
 import { platformRouter } from './modules/platform/platform.routes.js';
 import { createPlatformService } from './modules/platform/platform.service.js';
 import { memberRouter } from './modules/members/member.routes.js';
+import { planRouter } from './modules/plans/plan.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
 import { uploadRouter } from './modules/uploads/upload.routes.js';
 import { gymRouter } from './modules/tenants/gym.routes.js';
@@ -115,6 +116,7 @@ export function createApp(deps: AppDeps) {
   v1.use('/staff', staffRouter({ jwt, auth, audit }));
   v1.use('/members', memberRouter({ jwt, audit, images }));
   v1.use('/uploads', uploadRouter({ jwt, images }));
+  v1.use('/plans', planRouter({ jwt, audit }));
   v1.use('/platform', platformRouter({ jwt, platform, audit }));
   app.use('/api/v1', v1);
 

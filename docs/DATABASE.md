@@ -114,6 +114,12 @@ disabled in the same transaction as the member.
 `src/modules/counters/counter.model.ts`. `key`, `seq`; `{ tenantId, key } unique`. Atomic `$inc` with
 upsert. Keys: `memberCode` (receipt numbers join in M6).
 
-### plans ⬜ M5 · memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · jobLocks / notifications ⬜ M9
+### plans ✅ (tenant-scoped)
+`src/modules/plans/plan.model.ts`. `name`, `nameKey` (lower-cased), `description`, `durationDays`,
+`pricePaise`, `taxMode` (`inclusive/exclusive/none`), `gstRate` (0/5/12/18/28), `archivedAt` (explicit
+`null` while live). Indexes: `{ tenantId, archivedAt, durationDays }`,
+`{ tenantId, nameKey } unique partial (archivedAt null)`.
+
+### memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · jobLocks / notifications ⬜ M9
 
 Field lists as in the review table above; each gets its own section here when implemented.
