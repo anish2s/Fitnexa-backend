@@ -89,7 +89,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Reports: revenue, memberships, attendance, growth, renewals: gym-local date range ≤ 366 days, day/week/month, zero-filled; 11 integration + 5 unit tests; compiled-server smoke 8/8
 
 ### M9 — Jobs, notifications, privacy
-- [ ] node-cron + Mongo lease lock; renewal reminder queue with retry
+- [x] node-cron + Mongo lease lock (jobs run once across instances); renewal reminder queue (expiring + expired) with retries/backoff, send hours, send-time re-checks, owner queue view/retry/cancel, on/off setting; 4 runner + 8 reminder tests
 - [ ] WhatsApp `wa.me` link generation
 - [ ] DPDP export / erase
 

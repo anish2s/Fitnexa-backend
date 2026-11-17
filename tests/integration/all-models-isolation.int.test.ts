@@ -1,6 +1,6 @@
 import mongoose, { type Model } from 'mongoose';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { Membership, PaymentOrder, WebhookEvent } from '../../src/db/models.js';
+import { Membership, Notification, PaymentOrder, WebhookEvent } from '../../src/db/models.js';
 import { runAsPlatform, runInTenant } from '../../src/tenancy/context.js';
 import { connectTestDb, describeWithDb, dropAndDisconnect } from '../helpers/db.js';
 import { FZ, PH, gymId, intApp, resetDemo } from '../helpers/int.js';
@@ -17,6 +17,7 @@ const TENANT_SCOPED = [
   'Counter',
   'Member',
   'Membership',
+  'Notification',
   'Payment',
   'PaymentOrder',
   'Plan',
@@ -66,6 +67,13 @@ describeWithDb('cross-tenant isolation for every model (real MongoDB)', () => {
           createdVia: 'desk',
         });
         await WebhookEvent.create({ provider: 'razorpay', eventId: `evt_iso${gym.slice(-6)}` });
+        await Notification.create({
+          memberId: m!.memberId,
+          membershipId: m!._id,
+          kind: 'renewal_expiring',
+          dedupeKey: `renewal_expiring:${m!._id}`,
+          nextAttemptAt: new Date(),
+        });
       });
     }
   });

@@ -46,6 +46,8 @@ const settingsSchema = new Schema(
     receiptPrefix: { type: String, trim: true, uppercase: true, maxlength: 10, default: 'RCPT' },
     /** Days before expiry when renewal reminders start. */
     renewalReminderDays: { type: Number, min: 0, max: 60, default: 7 },
+    /** Email members before and just after their membership ends (M9 jobs). */
+    renewalRemindersEnabled: { type: Boolean, default: true },
   },
   { _id: false },
 );

@@ -81,6 +81,7 @@ export const settingsPatch = z.object({
     .regex(/^[A-Z0-9]{1,10}$/, 'Letters and digits only, up to 10')
     .optional(),
   renewalReminderDays: z.number().int().min(0).max(60).optional(),
+  renewalRemindersEnabled: z.boolean().optional(),
 });
 
 /** What a gym owner may change about their own gym (`gym:update`). */

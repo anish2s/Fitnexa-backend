@@ -139,7 +139,7 @@ Always the host's gym; the body can't name another one.
 | Method & path | Permission | Body | Result |
 |---|---|---|---|
 | `GET /gym` | `gym:read` (owner, staff) | — | gym view (below) |
-| `PATCH /gym` | `gym:update` (owner) | any of `name, email, phone, address{…}, settings{timezone, gstin, receiptPrefix, renewalReminderDays}` | gym view |
+| `PATCH /gym` | `gym:update` (owner) | any of `name, email, phone, address{…}, settings{timezone, gstin, receiptPrefix, renewalReminderDays, renewalRemindersEnabled}` | gym view |
 | `PATCH /gym/branding` | `branding:update` (owner) | any of `logoUrl, appIconUrl` (https only), `primaryColor, secondaryColor` (`#RRGGBB`), `defaultTheme` (`dark`/`light`/`system`) | gym view |
 
 Patches merge: sending `settings.timezone` leaves the other settings alone. `null` clears an optional
@@ -167,7 +167,7 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
 `member.photo_remove`, `member.import`, `plan.create`, `plan.update`, `plan.archive`, `plan.restore`, `membership.create`, `membership.renew`,
 `membership.cancel`, `payment.record`, `payment.refund`, `payment.refund_failed`,
-`gym.payment_gateway_update`, `gym.payment_gateway_remove`. Member names, birth dates,
+`gym.payment_gateway_update`, `gym.payment_gateway_remove`, `notification.retry`, `notification.cancel`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -427,6 +427,23 @@ always agree.
 | `attendance` | `{ period, checkIns }` | `totals{ checkIns, uniqueMembers, averagePerDay }`, `byHour[24]`, `byWeekday[7]` |
 | `growth` | `{ period, asOf, joined, archived, totalMembers, activeMembers }` (the last two as of the period's end) | `totals{ joined, archived, netChange }` |
 | `renewals` | `{ period, ending, renewedOnTime, renewedLate, notRenewed, pending, renewalRate }` (by end date) | `renewalRate` = renewed ÷ (renewed + not renewed); `pending` = ends today or later, not renewed yet |
+
+## Renewal reminders (gym host)
+
+Two scheduled jobs (see DEPLOYMENT.md) email members automatically:
+- **Hourly scan** queues one `renewal_expiring` reminder per membership ending within the gym's
+  `renewalReminderDays` (started, not renewed, member not archived), and one `renewal_expired` within
+  3 days after it ends without a renewal. Idempotent: never more than one of each per membership.
+- **Dispatcher** (every 5 min) sends due reminders **only 09:00–20:00 gym time**. It re-checks at
+  send time: renewed or cancelled → `cancelled`, archived → `cancelled`, no email → `skipped` (use the
+  WhatsApp link instead). Failures retry after 5 min, 30 min, 2 h, 12 h; the 5th failure is `failed`.
+- Owners switch it off with `PATCH /gym { settings: { renewalRemindersEnabled: false } }`.
+
+| Method & path | Who | Result |
+|---|---|---|
+| `GET /notifications` | `renewals:manage` (owner; grantable) | `?status=queued|sending|sent|failed|skipped|cancelled&kind&page&limit` → `[{ id, kind, channel, status, attempts, nextAttemptAt, sentAt, reason, membershipId, member{ id, name, memberCode, phone }, createdAt }]` |
+| `POST /notifications/:id/retry` | same | failed/skipped → queued (`409` otherwise) |
+| `POST /notifications/:id/cancel` | same | queued → cancelled (`409` otherwise) |
 
 ## Image uploads — `/api/v1/uploads` (gym host)
 

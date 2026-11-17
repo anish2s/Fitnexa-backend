@@ -151,6 +151,16 @@ Notes for the frontend (Phase 2/3):
 | Only staff (`attendance:checkin`) can check in; members can't check themselves in | ✅ |
 | `QR_SIGNING_SECRET` optional; default is derived from `JWT_ACCESS_SECRET` with domain separation (never the JWT key itself) | ✅ |
 
+## Scheduled jobs & reminders ✅ M9
+
+| Control | Status |
+|---|---|
+| Jobs run per gym inside `runInTenant`; suspended/archived gyms skipped; one gym's failure isolated | ✅ |
+| Lease lock: concurrent instances run a job once (5 parallel → 1) | ✅ |
+| Reminders claimed atomically (queued → sending) so no double send; stuck sends re-queued after 15 min (a crash mid-send could repeat one email) | ✅ |
+| Queue stores no address or text; conditions re-checked at send time (renewed/archived/no email) | ✅ |
+| No email to members outside 09:00–20:00 gym time; owner can switch reminders off | ✅ |
+
 ## Privacy (DPDP Act 2023) ⬜ M9
 - Collect the minimum: DOB/gender optional; no ID documents stored. ✅ M4
 - Consent recorded with timestamp and version at registration. ✅ M4

@@ -26,6 +26,8 @@ import { gatewayRouters } from './modules/payments/gateway.routes.js';
 import { createGatewayService } from './modules/payments/gateway.service.js';
 import { httpRazorpayClient, type RazorpayClient } from './modules/payments/razorpay.client.js';
 import { planRouter } from './modules/plans/plan.routes.js';
+import { notificationRouter } from './modules/notifications/notification.routes.js';
+import { createNotificationService } from './modules/notifications/notification.service.js';
 import { reportRouters } from './modules/reports/report.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
 import { uploadRouter } from './modules/uploads/upload.routes.js';
@@ -159,6 +161,13 @@ export function createApp(deps: AppDeps) {
   const rep = reportRouters({ jwt });
   v1.use('/dashboard', rep.dashboard);
   v1.use('/reports', rep.reports);
+  v1.use(
+    '/notifications',
+    notificationRouter({
+      jwt,
+      notifications: createNotificationService({ env, mailer: deps.mailer, logger, audit }),
+    }),
+  );
   v1.use('/uploads', uploadRouter({ jwt, images }));
   v1.use('/plans', planRouter({ jwt, audit }));
   v1.use('/platform', platformRouter({ jwt, platform, audit }));

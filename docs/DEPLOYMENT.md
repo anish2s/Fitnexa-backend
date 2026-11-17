@@ -46,6 +46,19 @@ Optional: `QR_SIGNING_SECRET` (attendance passes; derived from the JWT secret if
 `PAYMENTS_ENCRYPTION_KEY`, Cloudinary keys. Changing `JWT_ACCESS_SECRET`
 signs everyone out within 15 minutes (their refresh still works and issues new tokens).
 
+## Scheduled jobs
+Run inside the API process (`JOBS_ENABLED=true`, the default). With several instances each job still
+runs once per tick (MongoDB lease in `jobLocks`). Schedules are UTC; each gym's rules use its own
+time zone.
+
+| Job | Schedule | Does |
+|---|---|---|
+| `renewal-reminders-scan` | hourly at :15 | queues renewal reminders per active gym |
+| `notifications-dispatch` | every 5 min | sends due reminders 09:00–20:00 gym time, with retries |
+
+Check `jobLocks` for `lastFinishedAt` / `lastError` / `lastSummary` per job. Reminders send real email
+only once `MAIL_TRANSPORT=resend` is configured (project Rule 7: owner approval first).
+
 ## Image uploads (Cloudinary)
 Optional at boot: without credentials, upload endpoints return `503 UPLOADS_NOT_CONFIGURED`.
 1. Create a Cloudinary account (free plan is enough for the pilot).

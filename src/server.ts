@@ -4,6 +4,8 @@ import { createApp } from './app.js';
 import { createLogger } from './lib/logger.js';
 import { createMailer } from './lib/mailer.js';
 import { mongoTenantLookup } from './modules/tenants/tenant.lookup.js';
+import { createJobs } from './jobs/index.js';
+import { startScheduler } from './jobs/runner.js';
 
 async function main() {
   const env = getEnv();
@@ -11,18 +13,23 @@ async function main() {
 
   await connectDatabase(env.MONGODB_URI, logger);
 
+  const mailer = createMailer(env, logger);
   const app = createApp({
     env,
     logger,
     tenantLookup: mongoTenantLookup,
     isDbReady: isDatabaseReady,
-    mailer: createMailer(env, logger),
+    mailer,
   });
   const server = app.listen(env.PORT, () => logger.info({ port: env.PORT }, 'API listening'));
+  const stopJobs = env.JOBS_ENABLED
+    ? startScheduler(createJobs({ env, logger, mailer }), logger)
+    : null;
 
   const shutdown = (signal: string) => {
     logger.info({ signal }, 'Shutting down');
     server.close(async () => {
+      await stopJobs?.();
       await disconnectDatabase();
       process.exit(0);
     });

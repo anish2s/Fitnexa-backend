@@ -39,6 +39,7 @@ export function toTenantView(t: LeanTenant) {
       gstin: s.gstin ?? null,
       receiptPrefix: s.receiptPrefix ?? 'RCPT',
       renewalReminderDays: s.renewalReminderDays ?? 7,
+      renewalRemindersEnabled: s.renewalRemindersEnabled ?? true,
     },
     branding: {
       logoUrl: b.logoUrl ?? null,

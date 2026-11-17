@@ -1,4 +1,3 @@
-import { Types } from 'mongoose';
 import {
   addDays,
   daysBetween,
@@ -12,6 +11,7 @@ import { requireTenantId } from '../../tenancy/context.js';
 import { Attendance } from '../attendance/attendance.model.js';
 import { Member } from '../members/member.model.js';
 import { Membership } from '../memberships/membership.model.js';
+import { nextAfter, unrenewedEnding, type MsRow } from '../memberships/renewal-status.js';
 import { Payment } from '../payments/payment.model.js';
 import { Tenant } from '../tenants/tenant.model.js';
 import {
@@ -27,8 +27,6 @@ import type { RangeQuery } from './report.schemas.js';
 const nextDay = (d: string) => formatDateOnly(addDays(parseDateOnly(d)!, 1))!;
 const shift = (d: string, n: number) => formatDateOnly(addDays(parseDateOnly(d)!, n))!;
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-type MsRow = { _id: Types.ObjectId; memberId: Types.ObjectId; startDate: Date; endDate: Date };
 
 async function gym() {
   const t = await Tenant.findById(requireTenantId())
@@ -62,13 +60,6 @@ const instantRange = (from: string, to: string, tz: string) => ({
 const localDay = (field: string, tz: string) => ({
   $dateToString: { format: '%Y-%m-%d', date: field, timezone: tz },
 });
-
-/** Members who have a later (non-cancelled) membership than the one ending on `end`. */
-function nextAfter(all: MsRow[], m: MsRow) {
-  return all
-    .filter((x) => String(x.memberId) === String(m.memberId) && x.startDate > m.endDate)
-    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())[0];
-}
 
 export function createReportService() {
   // ---------------------------------------------------------------- shared aggregates
@@ -126,26 +117,6 @@ export function createReportService() {
       endDate: { $gte: onDay },
     });
     return Member.distinct('_id', { _id: { $in: ids }, archivedAt: null });
-  }
-
-  /** Non-cancelled memberships ending in [from, to] whose member hasn't renewed and isn't archived. */
-  async function unrenewedEnding(from: string, to: string) {
-    const ending = await Membership.find({
-      cancelledAt: null,
-      endDate: { $gte: parseDateOnly(from)!, $lte: parseDateOnly(to)! },
-    })
-      .select('memberId startDate endDate')
-      .lean<MsRow[]>();
-    if (!ending.length) return [];
-    const memberIds = [...new Set(ending.map((m) => String(m.memberId)))];
-    const [all, live] = await Promise.all([
-      Membership.find({ cancelledAt: null, memberId: { $in: memberIds } })
-        .select('memberId startDate endDate')
-        .lean<MsRow[]>(),
-      Member.distinct('_id', { _id: { $in: memberIds }, archivedAt: null }),
-    ]);
-    const liveSet = new Set(live.map(String));
-    return ending.filter((m) => liveSet.has(String(m.memberId)) && !nextAfter(all, m));
   }
 
   // ---------------------------------------------------------------- dashboard
