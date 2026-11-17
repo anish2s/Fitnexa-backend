@@ -146,3 +146,6 @@ depend on the backend.
 - **2026-11-17** — M9: job runner with Mongo lease lock, renewal reminder emails (queue, retries,
   send hours), WhatsApp links, DPDP export/erase. 368 tests passing. Local dev databases need one
   index migration (see DATABASE.md "Index migrations").
+  Compiled-server smoke 8/8 (scheduler start, WhatsApp links, export, erase permissions, erase,
+  reminder queue) and a real cron tick observed: `notifications-dispatch` took the lease, ran for
+  both gyms with no failures and released it.
