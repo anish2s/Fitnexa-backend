@@ -134,3 +134,6 @@ depend on the backend.
 - **2026-11-17** — M6 in four commits: desk payments (idempotent, balances, gap-free receipts per FY,
   sell + collect), PDF receipts, refunds, Razorpay (per-gym encrypted keys, orders, verify, signed
   webhooks, gateway refunds). Test-mode only; nothing talks to Razorpay in tests. 313 tests passing.
+  Compiled-server smoke test 14/14: dues, desk payment, idempotent retry, overpay refused, PDF
+  receipt, refund permissions, refund numbering, totals, Razorpay key connect (live refused), signed
+  vs forged webhook (raw-body HMAC), cross-gym read, no secrets in logs.
