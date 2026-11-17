@@ -1,6 +1,12 @@
 import mongoose, { type Model } from 'mongoose';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { Membership, Notification, PaymentOrder, WebhookEvent } from '../../src/db/models.js';
+import {
+  GatewayAlert,
+  Membership,
+  Notification,
+  PaymentOrder,
+  WebhookEvent,
+} from '../../src/db/models.js';
 import { runAsPlatform, runInTenant } from '../../src/tenancy/context.js';
 import { connectTestDb, describeWithDb, dropAndDisconnect } from '../helpers/db.js';
 import { FZ, PH, gymId, intApp, resetDemo } from '../helpers/int.js';
@@ -15,6 +21,7 @@ const TENANT_SCOPED = [
   'AuditLog',
   'AuthToken',
   'Counter',
+  'GatewayAlert',
   'Member',
   'Membership',
   'Notification',
@@ -55,7 +62,7 @@ describeWithDb('cross-tenant isolation for every model (real MongoDB)', () => {
         consent: true,
       });
     }
-    // Razorpay orders and webhook events have no seed data; add one per gym directly.
+    // Razorpay orders, webhook events and gateway alerts have no seed data; add one per gym.
     for (const gym of [ph, fz]) {
       await runInTenant(gym, async () => {
         const m = await Membership.findOne().lean();
@@ -67,6 +74,14 @@ describeWithDb('cross-tenant isolation for every model (real MongoDB)', () => {
           createdVia: 'desk',
         });
         await WebhookEvent.create({ provider: 'razorpay', eventId: `evt_iso${gym.slice(-6)}` });
+        await GatewayAlert.create({
+          razorpayOrderId: `order_iso${gym.slice(-6)}`,
+          razorpayPaymentId: `pay_iso${gym.slice(-6)}`,
+          amountPaise: 1000,
+          membershipId: m!._id,
+          memberId: m!.memberId,
+          source: 'webhook',
+        });
         await Notification.create({
           memberId: m!.memberId,
           membershipId: m!._id,
@@ -155,6 +170,20 @@ describeWithDb('cross-tenant isolation for every model (real MongoDB)', () => {
       await runInTenant(fz, async () => {
         await expect(model.find({ tenantId: ph }).lean(), model.modelName).rejects.toThrow();
       });
+    }
+  });
+
+  it('bulkWrite is refused inside a tenant scope for every scoped model, and writes nothing', async () => {
+    for (const model of scopedModels()) {
+      const name = model.modelName;
+      const before = await runAsPlatform('isolation test', () => model.countDocuments({}));
+      await runInTenant(fz, async () => {
+        await expect(model.bulkWrite([{ deleteMany: { filter: {} } }]), name).rejects.toThrow(
+          /"bulkWrite" cannot be tenant-scoped/,
+        );
+      });
+      const after = await runAsPlatform('isolation test', () => model.countDocuments({}));
+      expect(after, `${name} rows`).toBe(before);
     }
   });
 });

@@ -22,6 +22,8 @@ are taken from the right hop and can't be spoofed from outside.
 See `.env.example`. Production requirements enforced at startup:
 - `NODE_ENV=production`, `ALLOW_TENANT_HEADER=false`, `CORS_ORIGINS` set.
 - Secrets only in the host's secret store, never in git.
+- Swagger UI (`/api/docs`) is off in production; set `ENABLE_API_DOCS=true` only if you want it
+  public. `/api/v1/openapi.json` is always served (it describes routes, never data).
 
 ## Build & run
 Node 22 (`.nvmrc`; `npm ci` refuses other versions).
@@ -121,7 +123,7 @@ MongoDB replica set, requests sent the way a proxy forwards them (internal `Host
 | CORS: own origin allowed; another gym's and foreign origins refused | ✅ |
 | Cross-gym token refused; `no-store` on API responses; JSON 404s without internals | ✅ |
 | Super admin (from `admin:create:prod`) signs in on the platform host | ✅ |
-| Swagger UI off in production; OpenAPI served | ✅ |
+| Swagger UI off in production (unless `ENABLE_API_DOCS=true`; assets served locally, no CDN); OpenAPI served | ✅ |
 | Scheduler started; no secrets/passwords/tokens in logs; member search terms redacted | ✅ |
 | SIGTERM → "Shutting down" → exit code 0 | ✅ |
 

@@ -49,7 +49,9 @@ export async function connectRazorpay(
   } catch (err) {
     // Show the person at the terminal the actual reason, not just "validation failed".
     if (err instanceof AppError && Array.isArray(err.details)) {
-      throw new Error((err.details as { message: string }[]).map((d) => d.message).join('; '));
+      throw new Error((err.details as { message: string }[]).map((d) => d.message).join('; '), {
+        cause: err,
+      });
     }
     throw err;
   }

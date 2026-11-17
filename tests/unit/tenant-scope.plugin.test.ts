@@ -132,6 +132,21 @@ describe('tenantScopePlugin — queries', () => {
       runInTenant(A, () => Probe.estimatedDocumentCount().exec()),
     ).rejects.toBeInstanceOf(TenantIsolationError);
   });
+
+  it('refuses bulkWrite inside a tenant scope and with no scope (its filters are never scoped)', async () => {
+    // Each of these would otherwise reach another gym's rows: bulkWrite filters bypass the plugin.
+    const ops = [
+      { updateMany: { filter: {}, update: { $set: { name: 'x' } } } },
+      { deleteMany: { filter: { tenantId: B } } },
+      { insertOne: { document: { name: 'y', tenantId: B } } },
+    ];
+    for (const op of ops) {
+      await expect(runInTenant(A, () => Probe.bulkWrite([op]))).rejects.toThrow(
+        /"bulkWrite" cannot be tenant-scoped/,
+      );
+      await expect(Probe.bulkWrite([op])).rejects.toBeInstanceOf(TenantIsolationError);
+    }
+  });
 });
 
 describe('tenantScopePlugin — aggregate', () => {

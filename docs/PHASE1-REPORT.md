@@ -5,7 +5,7 @@ _Prepared 2026-11-17 for the owner's approval. Phase 2 (dashboard) starts only a
 ## Summary
 
 The backend for the multi-gym SaaS is built: one API, one MongoDB, every gym isolated on its own
-subdomain. Milestones 1–10 are complete. **384 automated tests pass against a real MongoDB**, the
+subdomain. Milestones 1–10 are complete. **398 automated tests pass against a real MongoDB**, the
 built server has been smoke-tested after every milestone, Cloudinary has been verified live, and the
 deployment steps were rehearsed end to end in production mode.
 
@@ -28,28 +28,29 @@ Resend and Razorpay; neither blocks dashboard work.
 | Plans | Monthly / quarterly / half-yearly / yearly; GST inclusive/exclusive/none | ✅ tested |
 | Memberships | Sell, renew (from expiry or today), cancel, history, expiring soon; no overlaps | ✅ tested |
 | Payments | Cash/UPI/card/bank; part payments; no double charges; gap-free receipt numbers per financial year; PDF receipts with CGST/SGST; refunds | ✅ tested |
-| Online payments | Each gym's own Razorpay (keys encrypted), member pays in app, signed webhooks, gateway refunds; test keys only | ✅ tested with a simulated Razorpay · 🟡 live test payment needs a Razorpay test account |
+| Online payments | Each gym's own Razorpay (keys encrypted), member pays in app, signed webhooks, gateway refunds; a member paying twice for one order is never applied twice, the owner is alerted to refund it; test keys only | ✅ tested with a simulated Razorpay · 🟡 live test payment needs a Razorpay test account |
 | Attendance | Rotating QR pass (screenshots expire), desk scan or manual check-in, one visit a day, history, daily report | ✅ tested |
 | Dashboard & reports | KPIs; revenue, memberships, attendance, growth and renewals reports by day/week/month | ✅ tested |
 | Reminders | Automatic renewal emails (09:00–20:00 gym time, retries); WhatsApp links for the desk | ✅ tested · sending 🟡 needs Resend |
 | Privacy (DPDP) | Member data export (owner and member); erasure that keeps tax records anonymised | ✅ tested |
-| API contract | OpenAPI 3.1 for all 99 operations, generated from the code (`docs/openapi.json`) | ✅ tested (CI fails if it goes stale) |
+| API contract | OpenAPI 3.1 for all 101 operations, generated from the code (`docs/openapi.json`) | ✅ tested (CI fails if it goes stale) |
 
 ## How it was verified
 
-- **384 tests** (37 files) on a real MongoDB replica set, including concurrency tests: parallel
+- **398 tests** (38 test files) on a real MongoDB replica set, including concurrency tests: parallel
   payments, check-ins, sales, refunds and job runs each produce exactly the right result.
 - **Isolation:** every gym collection is tested for cross-gym list, count, fetch, aggregate, join,
   update and delete. A new collection without isolation fails the tests.
 - **Route audit:** a test reads every route and enforces sign-in, permissions, input validation,
-  idempotency on money routes, and impersonation blocks. Only 11 routes are public, each on purpose.
+  idempotency on money routes, and impersonation blocks. Only 16 routes are public, each on purpose (11 API routes, the OpenAPI document, and
+  Swagger UI with its 3 assets, which is off in production).
 - **Built-server smoke tests** after each milestone (M1–M9), plus an observed scheduled-job run.
 - **Live:** Cloudinary on your account (7/7, including a tampered upload refused by Cloudinary).
 - **Deployment rehearsal:** clean checkout, production build, production settings, simulated
   HTTPS proxy: 21 checks and a clean shutdown (DEPLOYMENT.md, "Verification").
 - **Dependencies:** 0 known vulnerabilities; no secrets in the repository or its history.
 
-Size: 116 source files (~12,500 lines), 42 test files (~7,200 lines), 38 commits, 11 runtime
+Size: 116 source files (~12,500 lines), 38 test files plus 5 test helpers (~7,600 lines), 38 commits, 11 runtime
 dependencies.
 
 ## Needs you

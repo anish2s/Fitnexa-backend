@@ -32,6 +32,7 @@
     "pdfkit": "^0.17.2",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
+    "swagger-ui-dist": "5.17.14",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -50,7 +51,7 @@
     "typescript-eslint": "^8.72.2",
     "vitest": "^5.1.0"
   },
-  "description": "Multi-tenant Gym SaaS \u2014 backend API (Express + MongoDB)",
+  "description": "Multi-tenant Gym SaaS — backend API (Express + MongoDB)",
   "engines": {
     "node": ">=22"
   }

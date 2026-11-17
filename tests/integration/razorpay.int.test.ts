@@ -1,6 +1,13 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
-import { AuditLog, Member, Membership, Payment, Tenant } from '../../src/db/models.js';
+import {
+  AuditLog,
+  GatewayAlert,
+  Member,
+  Membership,
+  Payment,
+  Tenant,
+} from '../../src/db/models.js';
 import { RazorpayError, type RazorpayClient } from '../../src/modules/payments/razorpay.client.js';
 import { runAsPlatform, runInTenant } from '../../src/tenancy/context.js';
 import { connectTestDb, describeWithDb, dropAndDisconnect } from '../helpers/db.js';
@@ -329,6 +336,25 @@ describeWithDb('Razorpay (test mode, fake gateway, real MongoDB)', () => {
     ).toBe(1);
   });
 
+  it('webhook signature is checked over the raw bytes, not re-serialised JSON', async () => {
+    await connect();
+    const o = await order(await membershipOf(PRIYA));
+    const body = captured(o.body.data.orderId, payId(), 400000);
+    // Same JSON value, different bytes than JSON.stringify(body) would produce.
+    const pretty = JSON.stringify(body, null, 2) + '\n';
+    const send = (raw: string, signedOver: string) =>
+      call('post', PH, '/webhooks/razorpay')
+        .set('Content-Type', 'application/json')
+        .set('X-Razorpay-Signature', hmac(signedOver, KEYS.webhookSecret))
+        .set('X-Razorpay-Event-Id', `evt_${randomUUID()}`)
+        .send(raw);
+    // Signed over the compact form but delivered pretty: a re-serialising verifier would accept it.
+    expect((await send(pretty, JSON.stringify(body))).status).toBe(400);
+    const ok = await send(pretty, pretty);
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.status).toBe('captured');
+  });
+
   it('webhook: unknown orders are acknowledged and ignored; unconnected gyms 404', async () => {
     await connect();
     const w = await webhook(captured('order_notOurs123', payId(), 1000));
@@ -355,6 +381,169 @@ describeWithDb('Razorpay (test mode, fake gateway, real MongoDB)', () => {
       paymentStatus: 'overpaid',
       balancePaise: -100000,
     });
+  });
+
+  // ---------------------------------------------------------------- duplicate payments
+  const phGym = async <T>(fn: () => Promise<T>) => runInTenant(await gymId('powerhouse'), fn);
+  const membershipState = (id: string) =>
+    phGym(async () => {
+      const m = (await Membership.findById(id).lean())!;
+      return { paidPaise: m.paidPaise, endDate: m.endDate, totalPaise: m.totalPaise };
+    });
+
+  it('a second payment on a paid order is not applied: duplicate_refund_due, audited, no refund', async () => {
+    await connect();
+    const priya = await membershipOf(PRIYA);
+    const o = await order(priya);
+    const first = payId();
+    expect((await verify(o.body.data.orderId, first)).status).toBe(201);
+    const paid = await membershipState(priya);
+
+    const second = payId();
+    const v = await verify(o.body.data.orderId, second);
+    expect(v.status).toBe(409);
+    expect(v.body.error.code).toBe('DUPLICATE_PAYMENT');
+    // The webhook for the same second payment, and a retry of it, add nothing more.
+    const w = await webhook(captured(o.body.data.orderId, second, 400000));
+    expect(w.status).toBe(200);
+    expect(w.body.data.status).toBe('duplicate_refund_due');
+    expect((await verify(o.body.data.orderId, second)).status).toBe(409);
+    // The webhook for the FIRST payment is still just the same payment, not a duplicate.
+    const w1 = await webhook(captured(o.body.data.orderId, first, 400000));
+    expect(w1.body.data.status).toBe('captured');
+
+    expect(await membershipState(priya)).toEqual(paid);
+    expect(await phGym(() => Payment.countDocuments({ method: 'razorpay' }))).toBe(1);
+    const alerts = await phGym(() => GatewayAlert.find().lean());
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({
+      status: 'duplicate_refund_due',
+      razorpayPaymentId: second,
+      appliedRazorpayPaymentId: first,
+      amountPaise: 400000,
+      source: 'checkout',
+    });
+    const logs = await phGym(() =>
+      AuditLog.find({ action: 'payment.duplicate_gateway_payment' }).lean(),
+    );
+    expect(logs).toHaveLength(1);
+    expect(logs[0]!.metadata).toMatchObject({ razorpayPaymentId: second, amountPaise: 400000 });
+    expect(rp.refunds).toEqual([]); // nothing refunded automatically
+  });
+
+  it('webhook-only: the second captured payment on a paid order becomes an alert', async () => {
+    await connect();
+    const arjun = await membershipOf(ARJUN);
+    const o = await order(arjun);
+    expect((await webhook(captured(o.body.data.orderId, payId(), 100000))).body.data.status).toBe(
+      'captured',
+    );
+    const paid = await membershipState(arjun);
+    const w = await webhook(captured(o.body.data.orderId, payId(), 100000));
+    expect(w.body.data.status).toBe('duplicate_refund_due');
+    expect(await membershipState(arjun)).toEqual(paid);
+    expect(await phGym(() => GatewayAlert.countDocuments({ source: 'webhook' }))).toBe(1);
+  });
+
+  it('concurrent: two different payments for one order apply once; the same payment twice is not a duplicate', async () => {
+    await connect();
+    const priya = await membershipOf(PRIYA);
+    const o = await order(priya);
+    const [a, b] = [payId(), payId()];
+    await Promise.all([
+      verify(o.body.data.orderId, a),
+      webhook(captured(o.body.data.orderId, b, 400000)),
+      verify(o.body.data.orderId, b),
+      webhook(captured(o.body.data.orderId, a, 400000)),
+    ]);
+    expect(await phGym(() => Payment.countDocuments({ method: 'razorpay' }))).toBe(1);
+    expect((await membershipState(priya)).paidPaise).toBe(400000);
+    const alerts = await phGym(() => GatewayAlert.find().lean());
+    expect(alerts).toHaveLength(1);
+    const applied = (await phGym(() => Payment.findOne({ method: 'razorpay' }).lean()))!;
+    expect([a, b]).toContain(applied.gateway!.paymentId);
+    expect(alerts[0]!.razorpayPaymentId).not.toBe(applied.gateway!.paymentId);
+  });
+
+  async function duplicateOnPriya() {
+    await connect();
+    const o = await order(await membershipOf(PRIYA));
+    await verify(o.body.data.orderId, payId());
+    await webhook(captured(o.body.data.orderId, payId(), 400000));
+    return (await phGym(() => GatewayAlert.findOne().lean()))!;
+  }
+
+  it('owner sees open alerts (list + dashboard count) and resolves one after refunding in Razorpay', async () => {
+    const alert = await duplicateOnPriya();
+    const list = await call('get', PH, '/gym/payment-gateway/alerts', owner);
+    expect(list.status).toBe(200);
+    expect(list.body.data.openCount).toBe(1);
+    expect(list.body.data.items).toHaveLength(1);
+    expect(list.body.data.items[0]).toMatchObject({
+      id: String(alert._id),
+      kind: 'duplicate_payment',
+      status: 'duplicate_refund_due',
+      amountPaise: 400000,
+      memberName: expect.any(String),
+    });
+    const dash = await call('get', PH, '/dashboard', owner);
+    expect(dash.body.data.alerts).toEqual({ duplicatePaymentsRefundDue: 1 });
+
+    const path = `/gym/payment-gateway/alerts/${alert._id}/resolve`;
+    expect((await call('post', PH, path, owner).send({})).status).toBe(422);
+    expect(
+      (
+        await call('post', PH, '/gym/payment-gateway/alerts/not-an-id/resolve', owner).send({
+          note: 'Refunded',
+        })
+      ).status,
+    ).toBe(422);
+    expect((await call('get', PH, '/gym/payment-gateway/alerts?status=bogus', owner)).status).toBe(
+      422,
+    );
+    const res = await call('post', PH, path, owner).send({ note: 'Refunded in Razorpay rfnd_1' });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      status: 'resolved',
+      resolutionNote: 'Refunded in Razorpay rfnd_1',
+    });
+    expect((await call('post', PH, path, owner).send({ note: 'again' })).status).toBe(409);
+
+    const after = await call('get', PH, '/gym/payment-gateway/alerts', owner);
+    expect(after.body.data).toMatchObject({ openCount: 0, items: [] });
+    const all = await call('get', PH, '/gym/payment-gateway/alerts?status=all', owner);
+    expect(all.body.data.items).toHaveLength(1);
+    expect((await call('get', PH, '/dashboard', owner)).body.data.alerts).toEqual({
+      duplicatePaymentsRefundDue: 0,
+    });
+    expect(
+      await phGym(() =>
+        AuditLog.countDocuments({ action: 'payment.duplicate_gateway_payment_resolve' }),
+      ),
+    ).toBe(1);
+  });
+
+  it('alerts: front desk and members are refused; signed-out is 401; FitZone sees none of them', async () => {
+    const alert = await duplicateOnPriya();
+    const path = `/gym/payment-gateway/alerts/${alert._id}/resolve`;
+    const me = await memberToken(PH, 'arjun@member.demo');
+    for (const token of [desk, me]) {
+      expect((await call('get', PH, '/gym/payment-gateway/alerts', token)).status).toBe(403);
+      expect((await call('post', PH, path, token).send({ note: 'Refunded' })).status).toBe(403);
+    }
+    expect((await call('get', PH, '/gym/payment-gateway/alerts')).status).toBe(401);
+    // Front desk's dashboard has no alerts block (refunds are not theirs to act on).
+    expect((await call('get', PH, '/dashboard', desk)).body.data.alerts).toBeNull();
+
+    const fzOwner = await tokenFor(FZ, 'owner@fitzone.demo');
+    const fzList = await call('get', FZ, '/gym/payment-gateway/alerts?status=all', fzOwner);
+    expect(fzList.body.data).toMatchObject({ openCount: 0, items: [] });
+    expect((await call('post', FZ, path, fzOwner).send({ note: 'Refunded' })).status).toBe(404);
+    // A Powerhouse token on the FitZone host is refused before anything is read.
+    expect((await call('get', FZ, '/gym/payment-gateway/alerts', owner)).status).toBe(401);
+    expect((await phGym(() => GatewayAlert.findById(alert._id).lean()))!.status).toBe(
+      'duplicate_refund_due',
+    );
   });
 
   // ---------------------------------------------------------------- gateway refunds

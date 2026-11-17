@@ -123,11 +123,17 @@ disabled in the same transaction as the member.
 `src/modules/counters/counter.model.ts`. `key`, `seq`; `{ tenantId, key } unique`. Atomic `$inc` with
 upsert. Keys: `memberCode`, `receipt:<financial year>` (e.g. `receipt:2026-27`), `refund:<financial year>`.
 
-### paymentOrders ✅ · webhookEvents ✅ (tenant-scoped)
+### paymentOrders ✅ · webhookEvents ✅ · gatewayalerts ✅ (tenant-scoped)
 `src/modules/payments/payment-order.model.ts`. **paymentOrders**: `membershipId`, `memberId`,
 `amountPaise`, `razorpayOrderId` (`{ tenantId, razorpayOrderId } unique`), `status` (`created/paid`),
 `razorpayPaymentId`, `createdBy`, `createdVia` (`desk/member`). **webhookEvents**: `provider`, `eventId`
 (`{ tenantId, provider, eventId } unique`), `event`; TTL 30 days on `createdAt`.
+**gatewayalerts** (model `GatewayAlert`): a captured payment we did not apply, today only a second
+payment on an already-paid order. `status` (`duplicate_refund_due/resolved`), `razorpayOrderId`,
+`razorpayPaymentId` (`{ tenantId, razorpayPaymentId } unique`, one alert per payment),
+`appliedRazorpayPaymentId`, `amountPaise`, `membershipId`, `memberId`, `source` (`checkout/webhook`),
+`resolvedAt`, `resolvedBy`, `resolutionNote`; `{ tenantId, status, createdAt }`. Kept (money records).
+New collection: run `npm run db:indexes` (additive).
 
 ### attendance ✅ (tenant-scoped)
 `src/modules/attendance/attendance.model.ts`. `memberId`, `membershipId` (the one that admitted them),

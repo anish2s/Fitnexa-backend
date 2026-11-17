@@ -5,7 +5,8 @@
 route, path/query/header parameter, request body, sign-in requirement and permission in it is the
 real one; CI fails if the committed file is stale (`npm run openapi` regenerates it). Responses are
 described as the standard envelope; the `data` of each endpoint is documented below.
-Swagger UI: `/api/docs` (development only).
+Swagger UI: `/api/docs`, served from this server (no CDN). Off in production unless
+`ENABLE_API_DOCS=true`. `/api/v1/openapi.json` is always public.
 
 Base path: `/api/v1`. The gym is identified by the host (`<gym>.yourapp.in`).
 
@@ -355,8 +356,10 @@ server sets `RAZORPAY_ALLOW_LIVE=true`. Desk payments work whether or not Razorp
 | `DELETE /gym/payment-gateway/razorpay` | owner, not while impersonated | — | settings (disconnected) |
 | `POST /memberships/:id/razorpay-order` | `payments:record` | `{ amountPaise? }` (default: balance; min ₹1) | `201` Checkout params |
 | `POST /members/me/memberships/:id/razorpay-order` | member (`self:pay`), own membership only | `{ amountPaise? }` | `201` Checkout params |
-| `POST /payments/razorpay/verify` | `payments:record` or member (own orders only) | `{ orderId, paymentId, signature }` from Checkout | `201` payment (`200` if already recorded) |
-| `POST /webhooks/razorpay` | Razorpay (signed) | raw Razorpay event | `200 { status: captured|refund_processed|refund_failed|ignored|duplicate }` |
+| `POST /payments/razorpay/verify` | `payments:record` or member (own orders only) | `{ orderId, paymentId, signature }` from Checkout | `201` payment (`200` if already recorded); `409 DUPLICATE_PAYMENT { details: { alertId } }` if the order was already paid by a different payment |
+| `POST /webhooks/razorpay` | Razorpay (signed) | raw Razorpay event | `200 { status: captured|duplicate_refund_due|refund_processed|refund_failed|ignored|duplicate }` (`duplicate` = event id already handled) |
+| `GET /gym/payment-gateway/alerts?status=duplicate_refund_due|resolved|all` | `payments:refund` (owner; grantable) | default: open alerts | `{ openCount, items[{ id, kind: duplicate_payment, status, amountPaise, razorpayOrderId, razorpayPaymentId, appliedRazorpayPaymentId, membershipId, memberId, memberName, source: checkout|webhook, createdAt, resolvedAt, resolutionNote }] }` (latest 200) |
+| `POST /gym/payment-gateway/alerts/:id/resolve` | `payments:refund` | `{ note }` (3–500 chars) | the alert, `status: resolved`. `409` if already resolved. |
 
 Checkout params: `{ keyId, orderId, amountPaise, currency: "INR", name, description, prefill{ name, email, contact } }`
 → pass to Razorpay Checkout (`key`, `order_id`, `amount`, …). On success send its
@@ -369,6 +372,14 @@ Checkout params: `{ keyId, orderId, amountPaise, currency: "INR", name, descript
   no-op.
 - Online payments are recorded even if they exceed the balance (money was taken); the membership
   then shows `paymentStatus: overpaid` and the owner can refund the excess.
+- **Duplicate payments on one order** (member paid twice: two tabs, a retried UPI intent): an order
+  pays its membership exactly once. A second, different captured payment for an already-paid order
+  is **not** applied (no payment row, no receipt, balance and dates unchanged). It is recorded as an
+  alert with `status: duplicate_refund_due` and an audit entry (`payment.duplicate_gateway_payment`).
+  Nothing is refunded automatically: the owner refunds it in the Razorpay dashboard, then resolves
+  the alert (audited as `payment.duplicate_gateway_payment_resolve`). The dashboard shows
+  `alerts.duplicatePaymentsRefundDue` to users with `payments:refund` (`null` for others). The same
+  payment arriving by both checkout and webhook is not a duplicate.
 - **Refunds** of online payments (`POST /payments/:id/refunds`) go through Razorpay to the original
   method: recorded first as `pending`, then `processed` (or reverted as `failed` if Razorpay refuses →
   `502 PAYMENT_GATEWAY_ERROR`, or later via the `refund.failed` webhook).

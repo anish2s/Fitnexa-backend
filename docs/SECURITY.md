@@ -18,7 +18,7 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 | `tenantId` forced into every query, aggregate, insert | ✅ | `tenancy/tenant-scope.plugin.ts`, `tests/unit/tenant-scope.plugin.test.ts` |
 | Fail closed: no context → operation throws | ✅ | same |
 | Filters/inserts naming another tenant throw; updates can't change `tenantId` | ✅ | same |
-| Unscopeable ops (`estimatedDocumentCount`, `bulkWrite`) blocked in tenant scope | ✅ | same |
+| Unscopeable ops (`estimatedDocumentCount`, `bulkWrite`) blocked in tenant scope | ✅ | same; `bulkWrite` also on a real DB for every gym model (refused, writes nothing): `tests/integration/all-models-isolation.int.test.ts` |
 | Aggregate joins (`$lookup`, `$unionWith`, `$graphLookup`, also inside `$facet` and nested lookups) get the tenant filter injected; joining an unscoped collection yields nothing (fail closed). Gap found and fixed in M5, before any join existed | ✅ | `tenancy/tenant-scope.plugin.ts`, `tests/integration/tenant-isolation.int.test.ts` |
 | Isolation violations logged as fatal, returned as opaque 500 | ✅ | `middleware/error-handler.ts` |
 | Real-DB proof: Gym B cannot list / get-by-id / update / delete / aggregate Gym A data | ✅ | `tests/integration/tenant-isolation.int.test.ts` |
@@ -129,6 +129,8 @@ Notes for the frontend (Phase 2/3):
 | Checkout callbacks never mark anything paid without server-side signature verification (HMAC of `order_id|payment_id` with the gym's key secret); forged/swapped signatures record nothing | ✅ |
 | Amount of an online payment comes from our order (or the signed webhook), never from the client | ✅ |
 | Each gateway payment id recorded once (unique index); verify + webhook racing for the same payment → one row | ✅ |
+| An order pays its membership once: claiming the order (`created → paid`) is in the payment's transaction, so a second, different payment (even concurrent) is never applied; it becomes a `duplicate_refund_due` alert + audit entry for the owner. No automatic refund | ✅ `tests/integration/razorpay.int.test.ts` |
+| Webhook test signs a pretty-printed body: accepted only when the signature is over those exact bytes, refused when signed over the compact re-serialisation | ✅ same |
 | `Idempotency-Key` required on every money-recording request; unique per gym | ✅ |
 | Payment + membership balance + receipt counter in one transaction; receipts and refund numbers gap-free per FY | ✅ |
 | Gym Razorpay secrets: AES-256-GCM, master key from env, gym id as AAD (a secret copied to another gym won't open), `select: false`, never returned or logged | ✅ |
@@ -180,7 +182,7 @@ Reviewed every control in this document against the code and tests, plus:
 
 | Area | Result |
 |---|---|
-| **Route audit (automated, every route read from the real routers)** — only 11 deliberate public routes; every gym route checks a permission (6 self-service exceptions listed in the test); every platform route needs a super admin; every `:id` validated; every write with a body validated; money routes require `Idempotency-Key`; irreversible/payout routes blocked while impersonating | ✅ `tests/http/route-security.test.ts` (fails CI if a new route breaks a rule) |
+| **Route audit (automated, every route read from the real routers)** — only 16 deliberate public routes (11 API, `/api/v1/openapi.json`, Swagger UI + 3 assets); routes outside `/api/v1` routers are audited too, and a check that the audit covers every route the app serves; every gym route checks a permission (6 self-service exceptions listed in the test); every platform route needs a super admin; every `:id` validated; every write with a body validated; money routes require `Idempotency-Key`; irreversible/payout routes blocked while impersonating | ✅ `tests/http/route-security.test.ts` (fails CI if a new route breaks a rule) |
 | Personal data in logs: request log keeps query **values** only for safe keys (`q`, WhatsApp `text`, … → `[redacted]`); headers not logged | ✅ fixed in M10 |
 | Caching: every `/api/v1` response defaults to `Cache-Control: no-store` (some handlers had forgotten); public branding/OpenAPI opt in | ✅ fixed in M10 |
 | Secrets: none in tracked files or git history (only a deliberately fake `rzp_live_` value in a test); `.env` ignored, mode 600 | ✅ |
@@ -219,7 +221,9 @@ Reviewed every control in this document against the code and tests, plus:
     be added if it becomes routine.
 13. Razorpay orders are created for the balance at that moment. If the desk collects cash before the
     member completes online payment, both are recorded and the membership shows `overpaid`; the owner
-    refunds the excess. Auto-refund was not built (money decisions stay with the owner).
+    refunds the excess. Auto-refund was not built (money decisions stay with the owner). A second
+    online payment on the *same* order is different: it is never applied and is raised to the owner
+    as a `duplicate_refund_due` alert to refund in Razorpay.
 14. A pass shared within its ~60–90 s life could let a friend in if the member hasn't checked in that
     day yet. The desk sees the member's photo on every scan to catch this; adding photos (Cloudinary)
     makes the check real.

@@ -67,6 +67,57 @@ describe('OpenAPI document', () => {
     expect(res.body.paths).toEqual(JSON.parse(JSON.stringify(spec.paths)));
     const ui = await request(app).get('/api/docs').set('Host', 'powerhouse.localhost');
     expect(ui.status).toBe(200);
-    expect(ui.text).toContain('swagger-ui-dist@5.17.14');
+    expect(ui.headers['content-type']).toMatch(/text\/html/);
+  });
+});
+
+describe('Swagger UI assets', () => {
+  const get = (path: string, a = app) => request(a).get(path).set('Host', 'powerhouse.localhost');
+
+  it('loads only from this server: no CDN, no inline script', async () => {
+    const ui = await get('/api/docs');
+    expect(ui.text).not.toMatch(/https?:\/\//);
+    expect(ui.text).not.toMatch(/<script>/);
+    const csp = ui.headers['content-security-policy'];
+    expect(csp).toContain("script-src 'self';");
+    expect(csp).not.toMatch(/https?:|unsafe-eval/);
+    for (const src of [...ui.text.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]!)) {
+      const asset = await get(src);
+      expect(asset.status, src).toBe(200);
+      expect(asset.body.length || asset.text.length, src).toBeGreaterThan(0);
+    }
+    expect((await get('/api/docs/swagger-ui-bundle.js')).headers['content-type']).toMatch(
+      /javascript/,
+    );
+  });
+
+  it('serves nothing else from node_modules', async () => {
+    for (const path of [
+      '/api/docs/package.json',
+      '/api/docs/index.html',
+      '/api/docs/../package.json',
+      '/api/docs/%2e%2e%2fpackage.json',
+    ]) {
+      expect((await get(path)).status, path).toBe(404);
+    }
+  });
+
+  const prod = {
+    NODE_ENV: 'production',
+    CORS_ORIGINS: 'https://*.yourapp.in',
+    MAIL_TRANSPORT: 'resend',
+    RESEND_API_KEY: 're_test_0000000000000000',
+    MAIL_FROM: 'Gym <no-reply@yourapp.in>',
+    GYM_APP_URL_TEMPLATE: 'https://{slug}.yourapp.in',
+  };
+
+  it('is off in production unless ENABLE_API_DOCS=true; the contract stays available', async () => {
+    const off = buildTestApp({ env: prod });
+    expect((await get('/api/docs', off)).status).toBe(404);
+    expect((await get('/api/docs/swagger-ui-bundle.js', off)).status).toBe(404);
+    expect((await get('/api/v1/openapi.json', off)).status).toBe(200);
+    const on = buildTestApp({ env: { ...prod, ENABLE_API_DOCS: 'true' } });
+    expect((await get('/api/docs', on)).status).toBe(200);
+    expect((await get('/api/docs/swagger-ui.css', on)).status).toBe(200);
   });
 });

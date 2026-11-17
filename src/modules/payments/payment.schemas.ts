@@ -85,3 +85,17 @@ export const verifyBody = z.object({
     .regex(/^[a-f0-9]{64}$/),
 });
 export type VerifyInput = z.infer<typeof verifyBody>;
+
+export const gatewayAlertListQuery = z.object({
+  /** Open alerts by default: the ones the owner still has to act on. */
+  status: z.enum(['duplicate_refund_due', 'resolved', 'all']).default('duplicate_refund_due'),
+});
+export type GatewayAlertListQuery = z.infer<typeof gatewayAlertListQuery>;
+
+export const gatewayAlertIdParams = z.object({ id: objectId });
+
+export const resolveGatewayAlertBody = z.object({
+  /** e.g. "Refunded in the Razorpay dashboard, rfnd_…" */
+  note: z.string().trim().min(3).max(500),
+});
+export type ResolveGatewayAlertInput = z.infer<typeof resolveGatewayAlertBody>;

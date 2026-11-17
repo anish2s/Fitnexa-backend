@@ -18,8 +18,9 @@ export function reportRouters(deps: { jwt: JwtConfig }) {
   dashboard.get('/', auth, authorize('dashboard:read'), async (req: Request, res: Response) => {
     const a = req.auth!;
     const includeRevenue = a.kind === 'tenant' && a.permissions.has('reports:read');
+    const includeAlerts = a.kind === 'tenant' && a.permissions.has('payments:refund');
     res.set('Cache-Control', 'no-store');
-    ok(res, await svc.dashboard({ includeRevenue }));
+    ok(res, await svc.dashboard({ includeRevenue, includeAlerts }));
   });
 
   const reports = Router();

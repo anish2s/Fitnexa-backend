@@ -119,6 +119,9 @@ export const envSchema = z
     /** Live keys move real money. Off until the owner explicitly approves going live. */
     RAZORPAY_ALLOW_LIVE: bool,
 
+    /** Swagger UI at /api/docs. Always on outside production; in production only when true. */
+    ENABLE_API_DOCS: bool,
+
     // --- Image uploads (Cloudinary). All three or none; without them uploads answer 503. ---
     CLOUDINARY_CLOUD_NAME: z
       .string()

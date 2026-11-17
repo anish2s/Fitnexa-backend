@@ -6,7 +6,7 @@ many gyms (`powerhouse.yourapp.in`, `fitzone.yourapp.in`, …) with strict per-g
 The admin dashboard and member PWA live in a separate repository, **gym-saas-web**, and talk to
 this API only through its documented REST endpoints.
 
-**Status:** Phase 1 (backend) complete: 384 tests against a real MongoDB; see the
+**Status:** Phase 1 (backend) complete: 398 tests against a real MongoDB; see the
 [Phase 1 report](docs/PHASE1-REPORT.md) (awaiting approval) and [progress](docs/PROGRESS.md).
 API contract: [`docs/openapi.json`](docs/openapi.json) (OpenAPI 3.1).
 

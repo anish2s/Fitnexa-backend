@@ -44,6 +44,14 @@ export const Errors = {
   gatewayNotConnected: () =>
     new AppError(409, 'PAYMENT_GATEWAY_NOT_CONNECTED', 'Razorpay is not connected for this gym'),
   gatewayError: (message: string) => new AppError(502, 'PAYMENT_GATEWAY_ERROR', message),
+  /** A second payment on an already-paid order: kept out of the books, owner alerted to refund. */
+  duplicateGatewayPayment: (alertId: string) =>
+    new AppError(
+      409,
+      'DUPLICATE_PAYMENT',
+      'This order was already paid. The second payment was not applied and the gym will refund it.',
+      { alertId },
+    ),
   invalidSignature: () =>
     new AppError(400, 'INVALID_SIGNATURE', 'Payment signature could not be verified'),
   passInvalid: () =>

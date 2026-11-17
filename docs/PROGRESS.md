@@ -94,10 +94,19 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] DPDP export (owner + member self) and erase (owner-only, confirmed, irreversible; personal data removed, financial/attendance records kept anonymised, photo deleted); 6 tests
 
 ### M10 — Hardening & Phase 1 gate ✅
-- [x] OpenAPI 3.1 generated from the real routers + Zod schemas (99 operations, permissions, headers, CSV/PDF bodies); served at `/api/v1/openapi.json`, committed as `docs/openapi.json` with a drift test; Swagger UI at `/api/docs` in development
+- [x] OpenAPI 3.1 generated from the real routers + Zod schemas (101 operations, permissions, headers, CSV/PDF bodies); served at `/api/v1/openapi.json`, committed as `docs/openapi.json` with a drift test; Swagger UI at `/api/docs` in development (assets served locally; in production only with `ENABLE_API_DOCS=true`)
 - [x] Security review against SECURITY.md + automated route audit over every route (public allow-list, permissions, platform admin, id/body validation, idempotency, impersonation blocks); fixed: PII in request-log query strings, default `no-store`; dependency audit 0 vulnerabilities, in-range updates; no secrets in repo or history
 - [x] Deployment instructions verified end to end **locally** (clean clone, production build with runtime deps only, production env, simulated proxy, 21 checks, graceful shutdown exit 0); doc fixed (Rule 7, prune step, ship package.json, env-file quoting). Real host still needs the owner (DNS/TLS, Atlas, Resend)
 - [x] Phase 1 completion report: [PHASE1-REPORT.md](PHASE1-REPORT.md), **awaiting owner approval**
+
+### M10.1 — Review follow-ups ✅
+- [x] Webhook test signs a pretty-printed body: accepted when signed over those bytes, refused when signed over the compact form (proves raw-byte verification)
+- [x] `bulkWrite` refused inside a tenant scope: unit test (3 op kinds, tenant and no scope) + real-DB test over every gym model (writes nothing)
+- [x] Route audit includes `/api/v1/openapi.json` and `/api/docs` (+ 3 assets) as deliberate public routes, and now checks that it covers every route the app serves
+- [x] Second captured payment on an already-paid order: not applied (membership balance/dates unchanged, no receipt); recorded as `duplicate_refund_due` alert + audit entry; owner list/resolve endpoints and a dashboard count; no automatic refund. Order claim moved into the payment transaction so concurrent different payments apply once; 5 tests incl. concurrency
+- [x] PHASE1-REPORT test-file count corrected (38 test files + 5 helpers; it said 42)
+- [x] Swagger UI assets served from `swagger-ui-dist` (pinned 5.17.14) instead of a CDN; strict CSP (`script-src 'self'`, no inline script); `/api/docs` off in production unless `ENABLE_API_DOCS=true`; 3 tests
+- [x] Also fixed: lint error from the `razorpay:connect` commit (`preserve-caught-error`)
 
 ## Schedule reassessment
 No existing code, so the plan stands. At 2–3 h/day, M2–M10 is roughly 4–5 weeks, which fits the
@@ -161,3 +170,8 @@ depend on the backend.
 - **2026-11-17** — M10: OpenAPI 3.1 from the real routers (99 operations, drift test), automated
   route security audit (fixed PII in request logs, default no-store), dependency audit 0, deployment
   rehearsed in production mode (21 checks, clean shutdown), Phase 1 report written. 384 tests.
+- **2026-11-17** — M10.1 review follow-ups: raw-body webhook proof, `bulkWrite` refusal tests, docs
+  routes in the route audit (plus a whole-app coverage check), duplicate online payments become owner
+  alerts instead of extending the membership, local Swagger UI assets (production opt-in), report
+  file count fixed. 398 tests passing (38 files). New collection `gatewayalerts`: run
+  `npm run db:indexes` on existing databases.

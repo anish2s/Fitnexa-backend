@@ -18,7 +18,13 @@ import {
   revertRefund,
 } from './payment.ledger.js';
 import { Payment } from './payment.model.js';
-import { PaymentOrder, WebhookEvent, type LeanPaymentOrder } from './payment-order.model.js';
+import {
+  GatewayAlert,
+  PaymentOrder,
+  WebhookEvent,
+  type LeanGatewayAlert,
+  type LeanPaymentOrder,
+} from './payment-order.model.js';
 import type { LeanPayment } from './payment.view.js';
 import {
   RazorpayError,
@@ -27,7 +33,32 @@ import {
   type RazorpayClient,
   type RazorpayCreds,
 } from './razorpay.client.js';
-import type { GatewayKeysInput, RefundInput, VerifyInput } from './payment.schemas.js';
+import type {
+  GatewayAlertListQuery,
+  GatewayKeysInput,
+  RefundInput,
+  ResolveGatewayAlertInput,
+  VerifyInput,
+} from './payment.schemas.js';
+
+function toAlertView(a: LeanGatewayAlert, memberName: string | null) {
+  return {
+    id: String(a._id),
+    kind: 'duplicate_payment' as const,
+    status: a.status,
+    amountPaise: a.amountPaise,
+    razorpayOrderId: a.razorpayOrderId,
+    razorpayPaymentId: a.razorpayPaymentId,
+    appliedRazorpayPaymentId: a.appliedRazorpayPaymentId ?? null,
+    membershipId: String(a.membershipId),
+    memberId: String(a.memberId),
+    memberName,
+    source: a.source,
+    createdAt: a.createdAt,
+    resolvedAt: a.resolvedAt ?? null,
+    resolutionNote: a.resolutionNote ?? null,
+  };
+}
 
 const SYSTEM: AuditContext = { actor: { type: 'system', name: 'Razorpay webhook' } };
 
@@ -229,20 +260,45 @@ export function createGatewayService(deps: {
     };
   }
 
-  /** Records a gateway payment once. Returns the Payment, existing or new. */
+  type CaptureResult =
+    | { kind: 'payment'; payment: LeanPayment; created: boolean }
+    | { kind: 'duplicate'; alert: LeanGatewayAlert; created: boolean };
+
+  /**
+   * Records a gateway payment once. Returns the Payment, existing or new.
+   *
+   * An order pays for its membership exactly once. Claiming the order (created → paid) happens in
+   * the same transaction as the payment insert, so of two DIFFERENT payments for one order only one
+   * can win, even concurrently; the loser becomes a `duplicate_refund_due` alert instead of
+   * paying the membership twice. The SAME payment arriving twice (checkout + webhook) is not a
+   * duplicate: it returns the payment already recorded.
+   */
   async function capture(
     order: LeanPaymentOrder,
     paymentId: string,
     amountPaise: number,
     ctx: AuditContext,
-  ) {
+    source: 'checkout' | 'webhook',
+  ): Promise<CaptureResult> {
     const existing = await Payment.findOne({ 'gateway.paymentId': paymentId }).lean<LeanPayment>();
-    if (existing) return { payment: existing, created: false };
+    if (existing) return { kind: 'payment', payment: existing, created: false };
+    const known = await GatewayAlert.findOne({
+      razorpayPaymentId: paymentId,
+    }).lean<LeanGatewayAlert>();
+    if (known) return { kind: 'duplicate', alert: known, created: false };
+
     const settings = await gymPaymentSettings();
     const session = await mongoose.startSession();
-    let id: Types.ObjectId;
+    let id: Types.ObjectId | null = null;
     try {
       await session.withTransaction(async () => {
+        id = null; // the callback may be retried after a write conflict
+        const claim = await PaymentOrder.updateOne(
+          { _id: order._id, status: 'created' },
+          { $set: { status: 'paid', razorpayPaymentId: paymentId } },
+          { session },
+        );
+        if (claim.matchedCount === 0) return; // already paid: commit nothing
         id = await insertPayment(
           session,
           {
@@ -258,25 +314,34 @@ export function createGatewayService(deps: {
           },
           settings,
         );
-        await PaymentOrder.updateOne(
-          { _id: order._id },
-          { $set: { status: 'paid', razorpayPaymentId: paymentId } },
-          { session },
-        );
       });
     } catch (err) {
       if (isDuplicateKey(err, 'gateway.paymentId')) {
         const p = await Payment.findOne({ 'gateway.paymentId': paymentId }).lean<LeanPayment>();
-        return { payment: p!, created: false };
+        return { kind: 'payment', payment: p!, created: false };
       }
       throw err;
     } finally {
       await session.endSession();
     }
-    const p = await Payment.findById(id!).lean<LeanPayment>();
+
+    if (!id) {
+      const paid = await PaymentOrder.findById(order._id).lean<LeanPaymentOrder>();
+      if (paid?.razorpayPaymentId === paymentId) {
+        // The same payment won the race through the other path (checkout vs webhook).
+        const p = await Payment.findOne({ 'gateway.paymentId': paymentId }).lean<LeanPayment>();
+        return { kind: 'payment', payment: p!, created: false };
+      }
+      return recordDuplicate(order, paid?.razorpayPaymentId ?? null, paymentId, amountPaise, {
+        ctx,
+        source,
+      });
+    }
+
+    const p = await Payment.findById(id).lean<LeanPayment>();
     await audit.record(ctx, {
       action: 'payment.record',
-      target: { type: 'payment', id: String(id!) },
+      target: { type: 'payment', id: String(id) },
       metadata: {
         receiptNumber: p!.receiptNumber,
         amountPaise,
@@ -286,7 +351,106 @@ export function createGatewayService(deps: {
         membershipId: String(order.membershipId),
       },
     });
-    return { payment: p!, created: true };
+    return { kind: 'payment', payment: p!, created: true };
+  }
+
+  /** Not applied to the membership, not refunded: recorded for the owner, once per payment. */
+  async function recordDuplicate(
+    order: LeanPaymentOrder,
+    appliedPaymentId: string | null,
+    paymentId: string,
+    amountPaise: number,
+    opts: { ctx: AuditContext; source: 'checkout' | 'webhook' },
+  ): Promise<CaptureResult> {
+    let alert: LeanGatewayAlert;
+    try {
+      const doc = await GatewayAlert.create({
+        status: 'duplicate_refund_due',
+        razorpayOrderId: order.razorpayOrderId,
+        razorpayPaymentId: paymentId,
+        appliedRazorpayPaymentId: appliedPaymentId,
+        amountPaise,
+        membershipId: order.membershipId,
+        memberId: order.memberId,
+        source: opts.source,
+      });
+      alert = doc.toObject() as unknown as LeanGatewayAlert;
+    } catch (err) {
+      if (!isDuplicateKey(err, 'razorpayPaymentId')) throw err;
+      const a = await GatewayAlert.findOne({
+        razorpayPaymentId: paymentId,
+      }).lean<LeanGatewayAlert>();
+      return { kind: 'duplicate', alert: a!, created: false };
+    }
+    logger.warn(
+      { orderId: order.razorpayOrderId, paymentId, source: opts.source },
+      'Second payment on an already-paid Razorpay order; refund due',
+    );
+    await audit.record(opts.ctx, {
+      action: 'payment.duplicate_gateway_payment',
+      target: { type: 'membership', id: String(order.membershipId) },
+      metadata: {
+        alertId: String(alert._id),
+        amountPaise,
+        razorpayOrderId: order.razorpayOrderId,
+        razorpayPaymentId: paymentId,
+        appliedRazorpayPaymentId: appliedPaymentId,
+        source: opts.source,
+      },
+    });
+    return { kind: 'duplicate', alert, created: true };
+  }
+
+  // ---------------------------------------------------------------- owner alerts
+
+  async function listAlerts(q: GatewayAlertListQuery) {
+    const filter = q.status === 'all' ? {} : { status: q.status };
+    const [items, openCount] = await Promise.all([
+      GatewayAlert.find(filter).sort({ createdAt: -1 }).limit(200).lean<LeanGatewayAlert[]>(),
+      GatewayAlert.countDocuments({ status: 'duplicate_refund_due' }),
+    ]);
+    const names = new Map(
+      (
+        await Member.find({ _id: { $in: items.map((a) => a.memberId) } })
+          .select('name')
+          .lean()
+      ).map((m) => [String(m._id), m.name]),
+    );
+    return {
+      openCount,
+      items: items.map((a) => toAlertView(a, names.get(String(a.memberId)) ?? null)),
+    };
+  }
+
+  async function resolveAlert(id: string, input: ResolveGatewayAlertInput, ctx: AuditContext) {
+    const a = await GatewayAlert.findOneAndUpdate(
+      { _id: id, status: 'duplicate_refund_due' },
+      {
+        $set: {
+          status: 'resolved',
+          resolvedAt: new Date(),
+          resolvedBy: ctx.actor.id ? new Types.ObjectId(ctx.actor.id) : undefined,
+          resolutionNote: input.note,
+        },
+      },
+      { returnDocument: 'after' },
+    ).lean<LeanGatewayAlert>();
+    if (!a) {
+      if (await GatewayAlert.exists({ _id: id }))
+        throw Errors.conflict('Alert is already resolved');
+      throw Errors.notFound('Alert');
+    }
+    await audit.record(ctx, {
+      action: 'payment.duplicate_gateway_payment_resolve',
+      target: { type: 'membership', id: String(a.membershipId) },
+      metadata: {
+        alertId: id,
+        amountPaise: a.amountPaise,
+        razorpayPaymentId: a.razorpayPaymentId,
+        note: input.note,
+      },
+    });
+    return toAlertView(a, null);
   }
 
   /** Browser callback after Checkout. Members may only complete their own orders. */
@@ -308,7 +472,9 @@ export function createGatewayService(deps: {
       throw Errors.invalidSignature();
     }
     // The order fixes the amount; a valid signature proves this payment is for this order.
-    return capture(order, input.paymentId, order.amountPaise, ctx);
+    const r = await capture(order, input.paymentId, order.amountPaise, ctx, 'checkout');
+    if (r.kind === 'duplicate') throw Errors.duplicateGatewayPayment(String(r.alert._id));
+    return r;
   }
 
   // ---------------------------------------------------------------- webhooks
@@ -350,8 +516,8 @@ export function createGatewayService(deps: {
           razorpayOrderId: pay.order_id,
         }).lean<LeanPaymentOrder>();
         if (order) {
-          await capture(order, pay.id, pay.amount, SYSTEM);
-          status = 'captured';
+          const r = await capture(order, pay.id, pay.amount, SYSTEM, 'webhook');
+          status = r.kind === 'duplicate' ? 'duplicate_refund_due' : 'captured';
         } else {
           logger.warn({ orderId: pay.order_id }, 'Webhook for an order this gym did not create');
         }
@@ -473,7 +639,17 @@ export function createGatewayService(deps: {
     return refundId!;
   }
 
-  return { getSettings, setKeys, removeKeys, createOrder, verify, webhook, refundOnline };
+  return {
+    getSettings,
+    setKeys,
+    removeKeys,
+    createOrder,
+    verify,
+    webhook,
+    refundOnline,
+    listAlerts,
+    resolveAlert,
+  };
 }
 
 export type GatewayService = ReturnType<typeof createGatewayService>;

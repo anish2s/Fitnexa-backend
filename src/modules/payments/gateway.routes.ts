@@ -19,6 +19,7 @@ import * as s from './payment.schemas.js';
 /**
  * Razorpay endpoints, mounted at:
  *  /gym/payment-gateway                 owner connects/disconnects the gym's Razorpay account
+ *  /gym/payment-gateway/alerts          duplicate online payments the owner must refund
  *  /memberships/:id/razorpay-order      desk creates a checkout order for a balance
  *  /members/me/memberships/:id/razorpay-order   member pays their own membership
  *  /payments/razorpay/verify            checkout callback (desk or member)
@@ -52,6 +53,36 @@ export function gatewayRouters(deps: { jwt: JwtConfig; gateway: GatewayService }
     notWhileImpersonating,
     async (req, res) => {
       ok(res, await g.removeKeys(auditContextFrom(req)));
+    },
+  );
+
+  // Second payments on already-paid orders, kept out of the books until the owner refunds them in
+  // Razorpay. Refund permission, because acting on one means sending money back.
+  settings.get(
+    '/alerts',
+    auth,
+    authorize('payments:refund'),
+    validate({ query: s.gatewayAlertListQuery }),
+    async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      ok(res, await g.listAlerts(req.valid.query as s.GatewayAlertListQuery));
+    },
+  );
+  settings.post(
+    '/alerts/:id/resolve',
+    auth,
+    authorize('payments:refund'),
+    validate({ params: s.gatewayAlertIdParams, body: s.resolveGatewayAlertBody }),
+    async (req, res) => {
+      const { id } = req.valid.params as { id: string };
+      ok(
+        res,
+        await g.resolveAlert(
+          id,
+          req.valid.body as s.ResolveGatewayAlertInput,
+          auditContextFrom(req),
+        ),
+      );
     },
   );
 

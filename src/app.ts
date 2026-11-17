@@ -7,7 +7,8 @@ import type { Env } from './config/env.js';
 import type { JwtConfig } from './auth/jwt.js';
 import type { Logger } from './lib/logger.js';
 import { buildOpenApi, type MountedRouter } from './openapi/generate.js';
-import { PACKAGE_VERSION, SWAGGER_HTML } from './openapi/assets.js';
+import { PACKAGE_VERSION } from './openapi/assets.js';
+import { openApiRouter, swaggerUiRouter } from './openapi/docs.routes.js';
 import { createImageStore, type ImageStore } from './lib/image-store.js';
 import type { Mailer } from './lib/mailer.js';
 import { corsMiddleware } from './middleware/cors.js';
@@ -237,23 +238,19 @@ export function createApp(deps: AppDeps) {
 
   // The API contract for gym-saas-web (it generates its client types from this). Built once, lazily.
   let spec: ReturnType<typeof buildOpenApi> | undefined;
-  v1.get('/openapi.json', (_req, res) => {
-    spec ??= buildOpenApi(mounts, { version: PACKAGE_VERSION });
-    res.set('Cache-Control', 'public, max-age=300').json(spec);
-  });
+  const contract = openApiRouter(
+    () => (spec ??= buildOpenApi(mounts, { version: PACKAGE_VERSION })),
+  );
+  v1.use(contract);
+  // Routes that are not part of the documented API but must still pass the route audit.
+  const unlisted: MountedRouter[] = [{ base: '/api/v1', path: '', router: contract }];
   app.use('/api/v1', v1);
-  if (env.NODE_ENV !== 'production') {
-    // Swagger UI for local development only; loads its assets from a pinned CDN version.
-    app.get('/api/docs', (_req, res) => {
-      res
-        .set(
-          'Content-Security-Policy',
-          "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:",
-        )
-        .type('html')
-        .send(SWAGGER_HTML);
-    });
+  if (env.NODE_ENV !== 'production' || env.ENABLE_API_DOCS) {
+    const ui = swaggerUiRouter();
+    app.use('/api/docs', ui);
+    unlisted.push({ base: '/api/docs', path: '', router: ui });
   }
+  app.locals.unlisted = unlisted;
 
   app.use(notFoundHandler);
   app.use(errorHandler);

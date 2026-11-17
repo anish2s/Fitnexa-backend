@@ -13,7 +13,11 @@ export { Counter } from '../modules/counters/counter.model.js';
 export { Plan } from '../modules/plans/plan.model.js';
 export { Membership } from '../modules/memberships/membership.model.js';
 export { Payment } from '../modules/payments/payment.model.js';
-export { PaymentOrder, WebhookEvent } from '../modules/payments/payment-order.model.js';
+export {
+  GatewayAlert,
+  PaymentOrder,
+  WebhookEvent,
+} from '../modules/payments/payment-order.model.js';
 export { Attendance } from '../modules/attendance/attendance.model.js';
 export { JobLock } from '../jobs/job-lock.model.js';
 export { Notification } from '../modules/notifications/notification.model.js';

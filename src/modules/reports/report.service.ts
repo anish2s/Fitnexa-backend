@@ -13,6 +13,7 @@ import { Member } from '../members/member.model.js';
 import { Membership } from '../memberships/membership.model.js';
 import { nextAfter, unrenewedEnding, type MsRow } from '../memberships/renewal-status.js';
 import { Payment } from '../payments/payment.model.js';
+import { GatewayAlert } from '../payments/payment-order.model.js';
 import { Tenant } from '../tenants/tenant.model.js';
 import {
   MAX_RANGE_DAYS,
@@ -121,8 +122,11 @@ export function createReportService() {
 
   // ---------------------------------------------------------------- dashboard
 
-  /** KPIs for the home screen. `revenue` only when the caller may see reports. */
-  async function dashboard(opts: { includeRevenue: boolean }) {
+  /**
+   * KPIs for the home screen. `revenue` only when the caller may see reports; `alerts` only when
+   * they may refund (the alerts are refunds owed).
+   */
+  async function dashboard(opts: { includeRevenue: boolean; includeAlerts: boolean }) {
     const { tz, today, reminderDays } = await gym();
     const todayDate = parseDateOnly(today)!;
     const monthStart = `${today.slice(0, 7)}-01`;
@@ -164,6 +168,14 @@ export function createReportService() {
         recentlyLapsed: lapsed.length,
       },
       dues: { outstandingPaise: dues[0]?.amount ?? 0, memberships: dues[0]?.n ?? 0 },
+      alerts: opts.includeAlerts
+        ? {
+            /** Second online payments on already-paid orders: refund in Razorpay, then resolve. */
+            duplicatePaymentsRefundDue: await GatewayAlert.countDocuments({
+              status: 'duplicate_refund_due',
+            }),
+          }
+        : null,
       revenue: opts.includeRevenue
         ? {
             thisMonth: {

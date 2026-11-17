@@ -8,7 +8,12 @@ import { buildTestApp } from '../helpers/app.js';
  * Security audit over EVERY mounted route, read from the real routers. A new route that forgets
  * sign-in, a permission check or input validation fails here, not in production.
  */
-const routes = listRoutes(buildTestApp().locals.mounts as MountedRouter[]);
+const app = buildTestApp();
+const routes = listRoutes([
+  ...(app.locals.mounts as MountedRouter[]),
+  // Not part of the documented API (OpenAPI document, Swagger UI), but audited all the same.
+  ...(app.locals.unlisted as MountedRouter[]),
+]);
 const key = (r: RouteInfo) => `${r.method.toUpperCase()} ${r.path}`;
 const has = (r: RouteInfo, kind: string) => r.metas.some((m) => m.kind === kind);
 
@@ -25,7 +30,27 @@ const PUBLIC = new Set([
   'POST /api/v1/auth/password/forgot',
   'POST /api/v1/auth/password/reset',
   'POST /api/v1/webhooks/razorpay', // proves itself with the gym's webhook signature
+  // The API contract: describes routes, never data; gym-saas-web generates its client from it.
+  'GET /api/v1/openapi.json',
+  // Swagger UI (off in production unless ENABLE_API_DOCS=true) and its locally served assets.
+  'GET /api/docs',
+  'GET /api/docs/init.js',
+  'GET /api/docs/swagger-ui.css',
+  'GET /api/docs/swagger-ui-bundle.js',
 ]);
+
+/** Every route handler registered anywhere in the app, found by walking Express's own stacks. */
+function countAppRoutes(stack: unknown[]): number {
+  let n = 0;
+  for (const layer of stack as {
+    route?: { methods: Record<string, boolean> };
+    handle?: { stack?: unknown[] };
+  }[]) {
+    if (layer.route) n += Object.values(layer.route.methods).filter(Boolean).length;
+    else if (Array.isArray(layer.handle?.stack)) n += countAppRoutes(layer.handle.stack);
+  }
+  return n;
+}
 
 /** Signed-in routes any gym user may call about THEMSELVES (no permission needed by design). */
 const SELF_SERVICE = new Set([
@@ -44,6 +69,11 @@ const BODYLESS_WRITES =
 describe('route security audit (all routes)', () => {
   it('found the whole API', () => {
     expect(routes.length).toBeGreaterThan(90);
+  });
+
+  it('audits every route the app serves, including ones outside /api/v1 routers', () => {
+    const stack = (app as unknown as { router: { stack: unknown[] } }).router.stack;
+    expect(routes.length).toBe(countAppRoutes(stack));
   });
 
   it('only the deliberate public routes skip sign-in', () => {
