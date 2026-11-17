@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–9 complete and verified against a real MongoDB 8.0 (live email, image upload and Razorpay round trip need credentials). Milestone 10 (hardening + Phase 1 gate) next.**
+**Phase 1 — Backend. Milestones 1–9 complete and verified against a real MongoDB 8.0; Cloudinary verified live (live email and Razorpay round trip still need credentials). Milestone 10 (hardening + Phase 1 gate) next.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -58,11 +58,11 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] `auditLogs` (per gym, readable by the owner) + `platformAuditLogs`; append-only at the model layer; field-level changes with email/phone masked; hooks on login, lockout, invite/reset, password change, logout-all, all M3 actions
 - [x] 172 tests passing on real MongoDB (29 new M3 integration tests incl. cross-tenant and role checks); typecheck, lint, build
 
-### M4 — Staff & member management ✅ (except two items blocked on credentials)
+### M4 — Staff & member management ✅ (live email still needs Resend credentials)
 - [~] **Real email provider: Resend** (moved up from M9). Transport, config validation, failure handling done and tested with a fake API; **blocked** on live delivery until a Resend API key and verified sending domain exist (see DEPLOYMENT.md)
 - [x] Staff CRUD, deactivate (ends sessions), activate, re-invite, permission overrides (grantable list only); 11 integration tests incl. IDOR + cross-tenant
 - [x] Members CRUD, archive/restore, search, pagination, profile, member self-profile (`/members/me`), consent capture, per-gym member codes, login kept in step with email; 12 integration tests incl. IDOR, cross-tenant, concurrent codes
-- [~] Cloudinary signed uploads (logo, app icon, member photo): signing, path checks, photo set/replace/remove with old-image deletion; 13 tests (signing verified against Cloudinary's documented example, network faked). **Blocked** on live upload until Cloudinary credentials exist
+- [x] Cloudinary signed uploads (logo, app icon, member photo): signing, path checks, photo set/replace/remove with old-image deletion; 13 tests. **Verified live 2026-11-17** against the owner's Cloudinary account (dev folder): signed upload, tampered path refused, no overwrite, delivery URL serves, delete removes it (7/7)
 - [x] CSV member import: dry run, per-row error report (line + column), in-file and in-gym duplicate checks, Indian date formats, all-or-nothing transaction, consent confirmation; 10 tests
 - [x] Cross-tenant suite for **every** model: classifies all models (a new unscoped model fails CI), checks every index starts with `tenantId`, and proves FitZone can't list/count/fetch/aggregate/update/delete Powerhouse rows in any collection
 
@@ -149,3 +149,7 @@ depend on the backend.
   Compiled-server smoke 8/8 (scheduler start, WhatsApp links, export, erase permissions, erase,
   reminder queue) and a real cron tick observed: `notifications-dispatch` took the lease, ran for
   both gyms with no failures and released it.
+- **2026-11-17** — Owner added Cloudinary credentials. Read-only ping OK; live round trip with the
+  app's own code 7/7: signed upload accepted at the server-chosen path, the same signature with a
+  different path (another gym's folder) refused by Cloudinary, overwrite blocked, delivery URL serves
+  the image, app delete removes it. Config now rejects truncated API secrets at startup.

@@ -98,10 +98,10 @@ Notes for the frontend (Phase 2/3):
 | DPDP consent captured at registration with time, wording version and recorder | ✅ |
 | Staff notes never returned to the member | ✅ |
 | Audit log masks member names, birth dates, notes, emergency contacts, email, phone | ✅ |
-| Uploads: the server picks the image path (gym folder + member + random name) and the signature binds it, so clients can't write into another gym's or member's space; `overwrite=false`; jpg/png/webp only | ✅ |
+| Uploads: the server picks the image path (gym folder + member + random name) and the signature binds it, so clients can't write into another gym's or member's space; `overwrite=false`; jpg/png/webp only | ✅ (confirmed against Cloudinary) |
 | Photo confirmation accepts only ids under this gym + member prefix with the issued name shape (no traversal) | ✅ |
 | Cloudinary secret never returned; image bytes never pass through the API | ✅ |
-| Live upload against Cloudinary | 🟡 blocked: needs credentials |
+| Live upload against Cloudinary: signature binds the path (tampered path refused by Cloudinary), no overwrite, delete works | ✅ verified live 2026-11-17 |
 | Memberships: no overlapping periods, enforced in a transaction that serialises sales per member (6 parallel sales → 1 created) | ✅ |
 | Price/tax snapshot at sale; amounts computed server-side from the plan, never taken from the client | ✅ |
 | Payments: required Idempotency-Key, unique per gym; retries replay, key reuse for another payment refused; concurrent duplicates collapse to one | ✅ |
