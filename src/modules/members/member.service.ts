@@ -9,6 +9,7 @@ import { Session } from '../auth/session.model.js';
 import { nextSequence } from '../counters/counter.model.js';
 import { Tenant } from '../tenants/tenant.model.js';
 import { User } from '../users/user.model.js';
+import { gymCalendar, membershipSummary } from '../memberships/membership.service.js';
 import { MEMBER_CONSENT_VERSION, Member } from './member.model.js';
 import type {
   CreateMemberInput,
@@ -106,9 +107,12 @@ export function createMemberService(deps: { audit: AuditService; images: ImageSt
   }
 
   async function toDetail(m: LeanMember) {
-    const login = m.userId
-      ? await User.findOne({ _id: m.userId, role: 'member' }).select('status lastLoginAt').lean()
-      : null;
+    const [login, membership] = await Promise.all([
+      m.userId
+        ? User.findOne({ _id: m.userId, role: 'member' }).select('status lastLoginAt').lean()
+        : null,
+      gymCalendar().then(({ today }) => membershipSummary(m._id, today)),
+    ]);
     return {
       id: String(m._id),
       ...toSelfView(m),
@@ -120,6 +124,8 @@ export function createMemberService(deps: { audit: AuditService; images: ImageSt
         reason: !m.email ? 'no_email' : m.archivedAt ? 'archived' : null,
         lastLoginAt: login?.lastLoginAt ?? null,
       },
+      /** Current membership for the member screen: status active|upcoming|expired|none. */
+      membership,
       archivedAt: m.archivedAt ?? null,
       createdAt: m.createdAt ?? null,
       updatedAt: m.updatedAt ?? null,

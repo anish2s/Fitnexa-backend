@@ -120,6 +120,16 @@ upsert. Keys: `memberCode` (receipt numbers join in M6).
 `null` while live). Indexes: `{ tenantId, archivedAt, durationDays }`,
 `{ tenantId, nameKey } unique partial (archivedAt null)`.
 
-### memberships ⬜ M5 · payments ⬜ M6 · attendance ⬜ M7 · jobLocks / notifications ⬜ M9
+### memberships ✅ (tenant-scoped)
+`src/modules/memberships/membership.model.ts`. `memberId`, `plan { planId, name, durationDays,
+pricePaise, taxMode, gstRate }` (snapshot at sale), `discountPaise`, `basePaise`, `gstPaise`, `totalPaise`,
+`startDate`, `endDate` (calendar dates, inclusive), `kind` (`new/renewal`), `previousMembershipId`,
+`soldBy`, `notes`, `cancelledAt` (explicit null), `cancelledBy`, `cancelReason`.
+Status is derived, never stored. Indexes: `{ tenantId, memberId, startDate: -1 }`,
+`{ tenantId, cancelledAt, endDate }`, `{ tenantId, plan.planId }`.
+Members carry a hidden `membershipRev` counter, bumped in every sale's transaction so concurrent sales
+for one member serialise (overlap check can't be raced).
+
+### payments ⬜ M6 · attendance ⬜ M7 · jobLocks / notifications ⬜ M9
 
 Field lists as in the review table above; each gets its own section here when implemented.

@@ -2,7 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import mongoose, { Types } from 'mongoose';
 import { hashPassword } from '../auth/password.js';
-import { Member, Plan, PlatformAdmin, Tenant, User } from '../db/models.js';
+import { Member, Membership, Plan, PlatformAdmin, Tenant, User } from '../db/models.js';
+import { addDays, parseDateOnly, todayIn } from '../lib/dates.js';
+import { priceBreakdown } from '../lib/money.js';
 import { nextSequence } from '../modules/counters/counter.model.js';
 import { MEMBER_CONSENT_VERSION } from '../modules/members/member.model.js';
 import { formatMemberCode } from '../modules/members/member.service.js';
@@ -27,7 +29,12 @@ interface DemoGym {
   gstin?: string;
   owner: { name: string; email: string; phone: string };
   staff: { name: string; email: string; phone: string };
-  members: { name: string; email?: string; phone: string }[];
+  members: {
+    name: string;
+    email?: string;
+    phone: string;
+    membership?: { plan: string; startedDaysAgo: number };
+  }[];
 }
 
 /** name, days, price in rupees (incl. GST where the gym charges it). */
@@ -48,9 +55,27 @@ export const DEMO_GYMS: DemoGym[] = [
     owner: { name: 'Rahul Mehta', email: 'owner@powerhouse.demo', phone: '+919800000001' },
     staff: { name: 'Sneha Patil', email: 'desk@powerhouse.demo', phone: '+919800000002' },
     members: [
-      { name: 'Arjun Sharma', email: 'arjun@member.demo', phone: '+919811111111' },
-      { name: 'Priya Nair', email: 'priya@member.demo', phone: '+919811111112' },
-      { name: 'Vikram Singh', email: 'vikram@member.demo', phone: '+919811111113' },
+      // Monthly, ends in 4 days (expiring soon).
+      {
+        name: 'Arjun Sharma',
+        email: 'arjun@member.demo',
+        phone: '+919811111111',
+        membership: { plan: 'Monthly', startedDaysAgo: 25 },
+      },
+      // Quarterly, expired 11 days ago.
+      {
+        name: 'Priya Nair',
+        email: 'priya@member.demo',
+        phone: '+919811111112',
+        membership: { plan: 'Quarterly', startedDaysAgo: 100 },
+      },
+      // Annual, plenty left.
+      {
+        name: 'Vikram Singh',
+        email: 'vikram@member.demo',
+        phone: '+919811111113',
+        membership: { plan: 'Annual', startedDaysAgo: 30 },
+      },
       // No email: managed by the front desk, no member-app access.
       { name: 'Suresh Kumar', phone: '+919833333331' },
     ],
@@ -64,7 +89,12 @@ export const DEMO_GYMS: DemoGym[] = [
     owner: { name: 'Kavya Reddy', email: 'owner@fitzone.demo', phone: '+919800000101' },
     staff: { name: 'Imran Khan', email: 'desk@fitzone.demo', phone: '+919800000102' },
     members: [
-      { name: 'Arjun Sharma', email: 'arjun@member.demo', phone: '+919811111111' },
+      {
+        name: 'Arjun Sharma',
+        email: 'arjun@member.demo',
+        phone: '+919811111111',
+        membership: { plan: 'Quarterly', startedDaysAgo: 10 },
+      },
       { name: 'Meera Iyer', email: 'meera@member.demo', phone: '+919822222222' },
       { name: 'Rohan Das', email: 'rohan@member.demo', phone: '+919822222223' },
       { name: 'Anita Joshi', phone: '+919833333341' },
@@ -118,14 +148,18 @@ export async function seedDemo(
       const tax = g.gstin
         ? { taxMode: 'inclusive' as const, gstRate: 18 as const }
         : { taxMode: 'none' as const, gstRate: 0 as const };
+      const plans = new Map<string, InstanceType<typeof Plan>>();
       for (const [name, durationDays, rupees] of DEMO_PLANS) {
-        await Plan.create({
+        plans.set(
           name,
-          nameKey: name.toLowerCase(),
-          durationDays,
-          pricePaise: rupees * 100,
-          ...tax,
-        });
+          await Plan.create({
+            name,
+            nameKey: name.toLowerCase(),
+            durationDays,
+            pricePaise: rupees * 100,
+            ...tax,
+          }),
+        );
       }
       // Member record + (with an email) a linked member login, as the members API creates them.
       for (const m of g.members) {
@@ -143,6 +177,29 @@ export async function seedDemo(
         });
         if (userId) {
           await User.create({ _id: userId, ...m, role: 'member' as const, memberId });
+        }
+        // Memberships relative to today, so "expiring soon" and "expired" have something to show.
+        const sold = m.membership;
+        if (sold) {
+          const plan = plans.get(sold.plan)!;
+          const today = parseDateOnly(todayIn('Asia/Kolkata'))!;
+          const startDate = addDays(today, -sold.startedDaysAgo);
+          await Membership.create({
+            memberId,
+            plan: {
+              planId: plan._id,
+              name: plan.name,
+              durationDays: plan.durationDays,
+              pricePaise: plan.pricePaise,
+              taxMode: plan.taxMode,
+              gstRate: plan.gstRate,
+            },
+            discountPaise: 0,
+            ...priceBreakdown(plan.pricePaise, plan.taxMode, plan.gstRate),
+            startDate,
+            endDate: addDays(startDate, plan.durationDays - 1),
+            kind: 'new',
+          });
         }
       }
     });

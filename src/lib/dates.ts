@@ -24,3 +24,15 @@ export function todayIn(timeZone: string, now = new Date()): string {
     day: '2-digit',
   }).format(now);
 }
+
+const DAY_MS = 86_400_000;
+
+/** Calendar arithmetic on UTC-midnight dates. */
+export function addDays(d: Date, days: number): Date {
+  return new Date(d.getTime() + days * DAY_MS);
+}
+
+/** Whole days from a to b (b - a), for UTC-midnight dates. */
+export function daysBetween(a: Date, b: Date): number {
+  return Math.round((b.getTime() - a.getTime()) / DAY_MS);
+}

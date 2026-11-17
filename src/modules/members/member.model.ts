@@ -39,6 +39,11 @@ const memberSchema = new Schema(
       recordedBy: { type: Schema.Types.ObjectId },
     },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
+    /**
+     * Bumped inside every membership sale's transaction. Two concurrent sales for the same member
+     * both write this document, so MongoDB serialises them and the overlap check can't be raced.
+     */
+    membershipRev: { type: Number, default: 0, select: false },
     archivedAt: { type: Date },
   },
   { timestamps: true },

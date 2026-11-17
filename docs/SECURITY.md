@@ -19,6 +19,7 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 | Fail closed: no context → operation throws | ✅ | same |
 | Filters/inserts naming another tenant throw; updates can't change `tenantId` | ✅ | same |
 | Unscopeable ops (`estimatedDocumentCount`, `bulkWrite`) blocked in tenant scope | ✅ | same |
+| Aggregate joins (`$lookup`, `$unionWith`, `$graphLookup`, also inside `$facet` and nested lookups) get the tenant filter injected; joining an unscoped collection yields nothing (fail closed). Gap found and fixed in M5, before any join existed | ✅ | `tenancy/tenant-scope.plugin.ts`, `tests/integration/tenant-isolation.int.test.ts` |
 | Isolation violations logged as fatal, returned as opaque 500 | ✅ | `middleware/error-handler.ts` |
 | Real-DB proof: Gym B cannot list / get-by-id / update / delete / aggregate Gym A data | ✅ | `tests/integration/tenant-isolation.int.test.ts` |
 | `runInTenant` / `runAsPlatform` finish lazy Mongoose queries inside the scope (bug found and fixed 2026-11-13) | ✅ | `tenancy/context.ts` |
@@ -101,6 +102,8 @@ Notes for the frontend (Phase 2/3):
 | Photo confirmation accepts only ids under this gym + member prefix with the issued name shape (no traversal) | ✅ |
 | Cloudinary secret never returned; image bytes never pass through the API | ✅ |
 | Live upload against Cloudinary | 🟡 blocked: needs credentials |
+| Memberships: no overlapping periods, enforced in a transaction that serialises sales per member (6 parallel sales → 1 created) | ✅ |
+| Price/tax snapshot at sale; amounts computed server-side from the plan, never taken from the client | ✅ |
 | CSV import: 1 MB / 2,000-row cap, parsed in memory without eval, same validation as the form, all-or-nothing transaction, needs `members:import` | ✅ |
 
 ## Email ✅ (transport) · 🟡 (live delivery)

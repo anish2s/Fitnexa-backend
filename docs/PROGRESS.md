@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–4 complete and verified against a real MongoDB 8.0 (live email and image upload blocked on credentials). Milestone 5 in progress.**
+**Phase 1 — Backend. Milestones 1–5 complete and verified against a real MongoDB 8.0 (live email and image upload blocked on credentials). Milestone 6 next.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -63,9 +63,9 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] CSV member import: dry run, per-row error report (line + column), in-file and in-gym duplicate checks, Indian date formats, all-or-nothing transaction, consent confirmation; 10 tests
 - [x] Cross-tenant suite for **every** model: classifies all models (a new unscoped model fails CI), checks every index starts with `tenantId`, and proves FitZone can't list/count/fetch/aggregate/update/delete Powerhouse rows in any collection
 
-### M5 — Plans & memberships
+### M5 — Plans & memberships ✅
 - [x] Plans CRUD + archive/restore (days, integer-paise price, GST inclusive/exclusive/none at 0/5/12/18/28%, GST only with a GSTIN, unique live names); 8 integration + 6 money unit tests
-- [ ] Assign, renew (from expiry or today), cancel, history; derived status; expiring-soon queries
+- [x] Sell, renew (from expiry or today), cancel, history (staff + member app); derived status; gym-wide status lists; expiring-soon excluding renewed/archived; no overlaps (race-safe); price snapshot; 13 integration tests
 
 ### M6 — Payments & receipts
 - [ ] Cash / UPI / card recording with idempotency
@@ -117,3 +117,9 @@ depend on the backend.
   Not yet smoke-tested against the compiled server (M3, M4).
   Dev machine moved to Node 22.23.5 (nvm default) and `.npmrc` `engine-strict=true` added, so npm
   refuses to install on an older Node. 232 tests pass on Node 22.
+- **2026-11-17** — M5: plans (GST inclusive/exclusive/none) and memberships (sell, renew, cancel,
+  derived status, expiring soon). Found and fixed an isolation gap while building it: the tenant
+  plugin scoped only the top level of an aggregate, so a `$lookup`/`$unionWith`/`$graphLookup` into
+  another collection could read other gyms' rows. Nothing used joins before M5, so no data was
+  exposed. Joins are now scoped automatically, with a real-DB test that fails without the fix.
+  260 tests passing.

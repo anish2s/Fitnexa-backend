@@ -78,6 +78,41 @@ function assertUpdateKeepsTenant(update: unknown, op: string) {
   }
 }
 
+/**
+ * Stages that read ANOTHER collection ($lookup, $unionWith, $graphLookup) would bypass the leading
+ * $match, so each gets the tenant filter too, recursively (inside $facet and nested lookups).
+ * Joining a collection without tenantId (e.g. tenants) therefore yields nothing: fail closed.
+ */
+function scopeJoinStages(stages: unknown[], tenantId: Types.ObjectId): void {
+  for (const stage of stages as Record<string, Record<string, unknown>>[]) {
+    if (!stage || typeof stage !== 'object') continue;
+    const lookup = stage.$lookup;
+    if (lookup) {
+      const inner = Array.isArray(lookup.pipeline) ? (lookup.pipeline as unknown[]) : [];
+      scopeJoinStages(inner, tenantId);
+      inner.unshift({ $match: { tenantId } });
+      lookup.pipeline = inner;
+    }
+    const union = stage.$unionWith;
+    if (union !== undefined) {
+      const spec: Record<string, unknown> =
+        typeof union === 'string' ? { coll: union } : (union as Record<string, unknown>);
+      const inner = Array.isArray(spec.pipeline) ? (spec.pipeline as unknown[]) : [];
+      scopeJoinStages(inner, tenantId);
+      inner.unshift({ $match: { tenantId } });
+      spec.pipeline = inner;
+      stage.$unionWith = spec;
+    }
+    const graph = stage.$graphLookup;
+    if (graph) {
+      const extra = (graph.restrictSearchWithMatch as Record<string, unknown> | undefined) ?? {};
+      graph.restrictSearchWithMatch = { $and: [extra, { tenantId }] };
+    }
+    const facet = stage.$facet;
+    if (facet) for (const sub of Object.values(facet)) scopeJoinStages(sub as unknown[], tenantId);
+  }
+}
+
 export function tenantScopePlugin(schema: Schema) {
   schema.add({
     tenantId: {
@@ -124,6 +159,7 @@ export function tenantScopePlugin(schema: Schema) {
     if (first && ('$geoNear' in first || '$search' in first || '$vectorSearch' in first)) {
       throw new TenantIsolationError('First-stage-only aggregate operators need explicit scoping');
     }
+    scopeJoinStages(pipeline, scope.tenantId);
     pipeline.unshift({ $match: { tenantId: scope.tenantId } });
   });
 

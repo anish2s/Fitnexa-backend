@@ -11,3 +11,4 @@ export { AuditLog, PlatformAuditLog } from '../modules/audit/audit.model.js';
 export { Member } from '../modules/members/member.model.js';
 export { Counter } from '../modules/counters/counter.model.js';
 export { Plan } from '../modules/plans/plan.model.js';
+export { Membership } from '../modules/memberships/membership.model.js';

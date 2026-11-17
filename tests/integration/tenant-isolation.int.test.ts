@@ -83,6 +83,47 @@ describeWithDb('tenant isolation against a real MongoDB', () => {
     expect(rows).toHaveLength(0);
   });
 
+  it('Gym B cannot reach Gym A rows through $lookup, $unionWith, $graphLookup or $facet', async () => {
+    await runInTenant(gymB, () => Probe.create({ name: 'Bina (Gym B)', phone: '9876543210' }));
+    const coll = Probe.collection.collectionName;
+    const rows = await runInTenant(gymB, () =>
+      Probe.aggregate<Record<string, { name: string }[]>>([
+        // Pipeline form with no filter of its own, and the localField/foreignField form.
+        { $lookup: { from: coll, pipeline: [], as: 'all' } },
+        { $lookup: { from: coll, localField: 'phone', foreignField: 'phone', as: 'samePhone' } },
+        {
+          $lookup: {
+            from: coll,
+            pipeline: [{ $lookup: { from: coll, pipeline: [], as: 'nested' } }],
+            as: 'outer',
+          },
+        },
+        {
+          $graphLookup: {
+            from: coll,
+            startWith: '$phone',
+            connectFromField: 'phone',
+            connectToField: 'phone',
+            as: 'graph',
+          },
+        },
+        { $facet: { viaFacet: [{ $lookup: { from: coll, pipeline: [], as: 'x' } }] } },
+      ]),
+    );
+    const names = JSON.stringify(rows);
+    expect(names).toContain('Bina');
+    expect(names).not.toContain('Ravi');
+
+    const union = await runInTenant(gymB, () =>
+      Probe.aggregate([{ $unionWith: coll }, { $unionWith: { coll, pipeline: [] } }]),
+    );
+    expect(union.map((r: { name: string }) => r.name)).toEqual([
+      'Bina (Gym B)',
+      'Bina (Gym B)',
+      'Bina (Gym B)',
+    ]);
+  });
+
   it('Gym B cannot target Gym A by naming its tenantId', async () => {
     await expect(runInTenant(gymB, () => Probe.find({ tenantId: gymA }))).rejects.toBeInstanceOf(
       TenantIsolationError,

@@ -159,7 +159,8 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `impersonation.start`, `impersonation.end`, `staff.create`, `staff.update`,
 `staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`, `member.create`,
 `member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
-`member.photo_remove`, `member.import`, `plan.create`, `plan.update`, `plan.archive`, `plan.restore`. Member names, birth dates,
+`member.photo_remove`, `member.import`, `plan.create`, `plan.update`, `plan.archive`, `plan.restore`, `membership.create`, `membership.renew`,
+`membership.cancel`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -252,6 +253,36 @@ Plan: `{ id, name, description, durationDays, pricePaise, taxMode: inclusive|exc
   GSTIN can't create GST plans (`422`).
 - Live plan names are unique per gym, ignoring case.
 - Editing a plan changes future sales only; memberships keep the price they were sold at.
+
+## Memberships (gym host)
+
+Reading needs `memberships:read`, selling/renewing/cancelling `memberships:manage` (owner and staff).
+
+| Method & path | Body / query | Result |
+|---|---|---|
+| `GET /members/:id/memberships` | — | `{ summary, items[] }` newest first |
+| `POST /members/:id/memberships` | `{ planId, startDate?, discountPaise?, notes? }` | `201` membership. `startDate` defaults to today; up to 1 year back or 90 days ahead. |
+| `POST /members/:id/memberships/renew` | `{ planId?, startFrom?: expiry|today, discountPaise?, notes? }` | `201` membership |
+| `POST /memberships/:id/cancel` | `{ reason }` | membership. Only active/upcoming; `409` otherwise. |
+| `GET /memberships` | `?status=active|upcoming|expired|cancelled&planId&page&limit` | memberships with `member{ id, memberCode, name, phone, photoUrl, archived }`, soonest end first |
+| `GET /memberships/expiring` | `?days&page&limit` | active memberships ending within `days` (default: gym's `renewalReminderDays`), whose member hasn't renewed and isn't archived. `meta.until`. |
+| `GET /members/me/memberships` | `self:read` (member) | own `{ summary, items[] }`, without notes/staff fields |
+
+Membership: `{ id, memberId, plan{ id, name, durationDays, pricePaise, taxMode, gstRate }, discountPaise,
+basePaise, gstPaise, totalPaise, startDate, endDate, kind: new|renewal, status, daysLeft, cancelledAt,
+cancelReason, notes, soldBy, previousMembershipId, createdAt }`.
+
+- **Status is derived** from the dates against today in the gym's time zone: `upcoming` (starts
+  later), `active`, `expired`, or `cancelled`. `daysLeft` counts today for active ones.
+- `startDate`/`endDate` are `YYYY-MM-DD`, both inclusive: a 30-day plan from 1 Mar ends 30 Mar.
+- The plan's price and tax are **copied at sale**; editing the plan later changes nothing sold.
+- Discount (paise) comes off the price before GST; it can't exceed the price.
+- **No overlaps**: `409 CONFLICT` with `details{ endDate, availableFrom }` of the clashing membership.
+- **Renew**: `expiry` starts the day after the latest membership ends, even if that is in the past
+  (a lapse isn't free); `today` starts today and is refused while one is still running. Default:
+  `expiry` while the latest is current/upcoming, otherwise `today`. Plan defaults to the last one.
+- `summary`: `{ status: active|upcoming|expired|none, current, nextStartDate }`. Member detail
+  (`GET /members/:id`) includes the same object as `membership`.
 
 ## Image uploads — `/api/v1/uploads` (gym host)
 
