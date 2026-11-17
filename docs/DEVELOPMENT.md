@@ -1,8 +1,10 @@
 # Development
 
 ## Prerequisites
-- Node.js 22 (`.nvmrc`), npm 10. With nvm, run `nvm use` in the repo root to switch this shell to 22
-  without changing your global default.
+- Node.js 22 (`.nvmrc`, `engines`), npm 10. Enforced: `.npmrc` sets `engine-strict=true`, so
+  `npm install`/`npm ci` fail with `EBADENGINE` on an older Node. With nvm, either `nvm use` in the
+  repo root (this shell only) or `nvm alias default 22` (every new shell). CI reads `.nvmrc`.
+  Older Node also breaks Vitest's failure output (`Map.groupBy` needs Node 21+).
 - MongoDB for running the API locally: either MongoDB Atlas (free M0) or a local `mongod` started as a
   single-node replica set (needed later for transactions):
   ```bash

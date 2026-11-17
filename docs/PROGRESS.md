@@ -115,5 +115,5 @@ depend on the backend.
   sync, per-gym codes), Cloudinary signed uploads, CSV import; plus a cross-tenant suite over every
   model. 232 tests passing. Blocked on owner: Resend key + domain, Cloudinary credentials.
   Not yet smoke-tested against the compiled server (M3, M4).
-  Note: the dev machine runs Node 20; Vitest's failure printer needs Node 21+ (`Map.groupBy`), so
-  failing tests crash the reporter there. Use Node 22 (the project's target) locally.
+  Dev machine moved to Node 22.23.5 (nvm default) and `.npmrc` `engine-strict=true` added, so npm
+  refuses to install on an older Node. 232 tests pass on Node 22.
