@@ -6,6 +6,8 @@ import { pinoHttp } from 'pino-http';
 import type { Env } from './config/env.js';
 import type { JwtConfig } from './auth/jwt.js';
 import type { Logger } from './lib/logger.js';
+import { buildOpenApi, type MountedRouter } from './openapi/generate.js';
+import { PACKAGE_VERSION, SWAGGER_HTML } from './openapi/assets.js';
 import { createImageStore, type ImageStore } from './lib/image-store.js';
 import type { Mailer } from './lib/mailer.js';
 import { corsMiddleware } from './middleware/cors.js';
@@ -82,7 +84,8 @@ export function createApp(deps: AppDeps) {
   app.use(corsMiddleware(env.CORS_ORIGINS));
 
   // Health checks bypass rate limiting and tenant resolution.
-  app.use(healthRouter(deps.isDbReady));
+  const health = healthRouter(deps.isDbReady);
+  app.use(health);
 
   app.use(
     rateLimit({
@@ -132,11 +135,17 @@ export function createApp(deps: AppDeps) {
   const images = deps.images === undefined ? createImageStore(env, logger) : deps.images;
 
   const v1 = express.Router();
-  v1.use('/public', publicTenantRouter());
-  v1.use('/auth', authRouter({ env, jwt, auth, audit }));
-  v1.use('/gym', gymRouter({ jwt, audit }));
-  v1.use('/audit-logs', auditRouter({ jwt, audit }));
-  v1.use('/staff', staffRouter({ jwt, auth, audit }));
+  /** Every router mounted under /api/v1, recorded for the OpenAPI document and the route audit. */
+  const mounts: MountedRouter[] = [];
+  const mount = (path: string, router: express.Router) => {
+    mounts.push({ base: '/api/v1', path, router });
+    v1.use(path, router);
+  };
+  mount('/public', publicTenantRouter());
+  mount('/auth', authRouter({ env, jwt, auth, audit }));
+  mount('/gym', gymRouter({ jwt, audit }));
+  mount('/audit-logs', auditRouter({ jwt, audit }));
+  mount('/staff', staffRouter({ jwt, auth, audit }));
   const ms = membershipRouters({ jwt, audit, env });
   const gateway = createGatewayService({
     env,
@@ -146,36 +155,57 @@ export function createApp(deps: AppDeps) {
   });
   const gw = gatewayRouters({ jwt, gateway });
   const pay = paymentRouters({ jwt, audit, gateway });
-  v1.use('/members', ms.perMember);
-  v1.use('/members', whatsappRouter({ jwt, env }));
-  v1.use('/members', privacyRouter({ jwt, audit, images, logger }));
+  mount('/members', ms.perMember);
+  mount('/members', whatsappRouter({ jwt, env }));
+  mount('/members', privacyRouter({ jwt, audit, images, logger }));
   const att = attendanceRouters({ jwt, passes: createPassSigner(qrMasterSecret(env)) });
-  v1.use('/members', att.perMember);
-  v1.use('/attendance', att.attendance);
-  v1.use('/members', pay.perMember);
-  v1.use('/members', gw.memberOrders);
-  v1.use('/members', memberRouter({ jwt, audit, images }));
-  v1.use('/memberships', pay.perMembership);
-  v1.use('/memberships', gw.deskOrders);
-  v1.use('/memberships', ms.memberships);
-  v1.use('/payments', gw.verify);
-  v1.use('/payments', pay.payments);
-  v1.use('/gym/payment-gateway', gw.settings);
-  v1.use('/webhooks', gw.webhooks);
+  mount('/members', att.perMember);
+  mount('/attendance', att.attendance);
+  mount('/members', pay.perMember);
+  mount('/members', gw.memberOrders);
+  mount('/members', memberRouter({ jwt, audit, images }));
+  mount('/memberships', pay.perMembership);
+  mount('/memberships', gw.deskOrders);
+  mount('/memberships', ms.memberships);
+  mount('/payments', gw.verify);
+  mount('/payments', pay.payments);
+  mount('/gym/payment-gateway', gw.settings);
+  mount('/webhooks', gw.webhooks);
   const rep = reportRouters({ jwt });
-  v1.use('/dashboard', rep.dashboard);
-  v1.use('/reports', rep.reports);
-  v1.use(
+  mount('/dashboard', rep.dashboard);
+  mount('/reports', rep.reports);
+  mount(
     '/notifications',
     notificationRouter({
       jwt,
       notifications: createNotificationService({ env, mailer: deps.mailer, logger, audit }),
     }),
   );
-  v1.use('/uploads', uploadRouter({ jwt, images }));
-  v1.use('/plans', planRouter({ jwt, audit }));
-  v1.use('/platform', platformRouter({ jwt, platform, audit }));
+  mount('/uploads', uploadRouter({ jwt, images }));
+  mount('/plans', planRouter({ jwt, audit }));
+  mount('/platform', platformRouter({ jwt, platform, audit }));
+  mounts.unshift({ base: '', path: '', router: health });
+  app.locals.mounts = mounts;
+
+  // The API contract for gym-saas-web (it generates its client types from this). Built once, lazily.
+  let spec: ReturnType<typeof buildOpenApi> | undefined;
+  v1.get('/openapi.json', (_req, res) => {
+    spec ??= buildOpenApi(mounts, { version: PACKAGE_VERSION });
+    res.set('Cache-Control', 'public, max-age=300').json(spec);
+  });
   app.use('/api/v1', v1);
+  if (env.NODE_ENV !== 'production') {
+    // Swagger UI for local development only; loads its assets from a pinned CDN version.
+    app.get('/api/docs', (_req, res) => {
+      res
+        .set(
+          'Content-Security-Policy',
+          "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:",
+        )
+        .type('html')
+        .send(SWAGGER_HTML);
+    });
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

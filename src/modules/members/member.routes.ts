@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import type { JwtConfig } from '../../auth/jwt.js';
 import { authenticate, authorize } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
+import { tag } from '../../lib/route-meta.js';
 import type { ImageStore } from '../../lib/image-store.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { photoBody } from '../uploads/upload.schemas.js';
@@ -31,7 +32,10 @@ export function memberRouter(deps: {
   router.post(
     '/import',
     authorize('members:import'),
-    express.text({ type: ['text/csv', 'text/plain'], limit: '1mb' }),
+    tag(express.text({ type: ['text/csv', 'text/plain'], limit: '1mb' }), {
+      kind: 'rawBody',
+      contentType: 'text/csv',
+    }),
     validate({ query: s.importQuery }),
     c.importCsv,
   );

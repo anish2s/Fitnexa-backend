@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { JwtConfig } from '../../auth/jwt.js';
 import { authenticate, authorize } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
+import { documentsHeader, produces } from '../../lib/route-meta.js';
 import type { AuditService } from '../audit/audit.service.js';
 import { memberIdParams } from '../members/member.schemas.js';
 import { membershipIdParams } from '../memberships/membership.schemas.js';
@@ -33,16 +34,33 @@ export function paymentRouters(deps: {
     '/:id/refunds',
     auth,
     authorize('payments:refund'),
+    documentsHeader(
+      'Idempotency-Key',
+      true,
+      'Unique per intended refund (e.g. a UUID); retries with the same key return the original result.',
+    ),
     validate({ params: s.paymentIdParams, body: s.refundBody }),
     c.refund,
   );
-  payments.get('/:id/receipt', auth, read, validate({ params: s.paymentIdParams }), c.receipt);
+  payments.get(
+    '/:id/receipt',
+    auth,
+    read,
+    produces('application/pdf'),
+    validate({ params: s.paymentIdParams }),
+    c.receipt,
+  );
 
   const perMembership = Router();
   perMembership.post(
     '/:id/payments',
     auth,
     authorize('payments:record'),
+    documentsHeader(
+      'Idempotency-Key',
+      true,
+      'Unique per intended payment (e.g. a UUID); retries with the same key return the original result.',
+    ),
     validate({ params: membershipIdParams, body: s.offlinePayment }),
     c.record,
   );
@@ -53,6 +71,7 @@ export function paymentRouters(deps: {
     '/me/payments/:id/receipt',
     auth,
     authorize('self:read'),
+    produces('application/pdf'),
     validate({ params: s.paymentIdParams }),
     c.selfReceipt,
   );

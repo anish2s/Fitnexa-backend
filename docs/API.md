@@ -1,6 +1,11 @@
 # API
 
-_Full OpenAPI/Swagger documentation is generated in Milestone 10. This file lists what exists now._
+**Machine-readable contract:** `GET /api/v1/openapi.json` (OpenAPI 3.1, also committed as
+[`docs/openapi.json`](openapi.json)). Generated from the mounted routers and their Zod schemas, so every
+route, path/query/header parameter, request body, sign-in requirement and permission in it is the
+real one; CI fails if the committed file is stale (`npm run openapi` regenerates it). Responses are
+described as the standard envelope; the `data` of each endpoint is documented below.
+Swagger UI: `/api/docs` (development only).
 
 Base path: `/api/v1`. The gym is identified by the host (`<gym>.yourapp.in`).
 

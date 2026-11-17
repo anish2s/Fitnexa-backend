@@ -1,6 +1,7 @@
 import type { RequestHandler } from 'express';
 import type { ZodType } from 'zod';
 import { Errors } from '../lib/errors.js';
+import { tag } from '../lib/route-meta.js';
 import { formatZodIssues } from './error-handler.js';
 
 interface Schemas {
@@ -23,20 +24,23 @@ declare module 'express-serve-static-core' {
  * also why a client-supplied `tenantId` in a body is silently dropped: no schema declares it.
  */
 export function validate(schemas: Schemas): RequestHandler {
-  return (req, _res, next) => {
-    const valid = {
-      body: undefined as unknown,
-      query: undefined as unknown,
-      params: undefined as unknown,
-    };
-    for (const part of ['body', 'query', 'params'] as const) {
-      const schema = schemas[part];
-      if (!schema) continue;
-      const result = schema.safeParse(req[part] ?? {});
-      if (!result.success) throw Errors.validation(formatZodIssues(result.error));
-      valid[part] = result.data;
-    }
-    req.valid = valid;
-    next();
-  };
+  return tag(
+    (req, _res, next) => {
+      const valid = {
+        body: undefined as unknown,
+        query: undefined as unknown,
+        params: undefined as unknown,
+      };
+      for (const part of ['body', 'query', 'params'] as const) {
+        const schema = schemas[part];
+        if (!schema) continue;
+        const result = schema.safeParse(req[part] ?? {});
+        if (!result.success) throw Errors.validation(formatZodIssues(result.error));
+        valid[part] = result.data;
+      }
+      req.valid = valid;
+      next();
+    },
+    { kind: 'validate', schemas },
+  );
 }

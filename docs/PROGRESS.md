@@ -94,7 +94,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] DPDP export (owner + member self) and erase (owner-only, confirmed, irreversible; personal data removed, financial/attendance records kept anonymised, photo deleted); 6 tests
 
 ### M10 — Hardening & Phase 1 gate
-- [ ] OpenAPI/Swagger from Zod schemas
+- [x] OpenAPI 3.1 generated from the real routers + Zod schemas (99 operations, permissions, headers, CSV/PDF bodies); served at `/api/v1/openapi.json`, committed as `docs/openapi.json` with a drift test; Swagger UI at `/api/docs` in development
 - [ ] Security review against SECURITY.md; dependency audit
 - [ ] Deployment instructions verified end to end
 - [ ] Phase 1 completion report

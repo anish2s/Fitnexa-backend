@@ -49,6 +49,7 @@ The super admin signs in on `admin.localhost:4000`.
 | `npm run build` / `npm start` | compile to `dist/` and run it |
 | `npm run seed` | demo data (refuses in production, never overwrites) |
 | `npm run format:check` | Prettier check (CI runs it; `npm run format` fixes) |
+| `npm run openapi` | regenerate `docs/openapi.json` after changing routes or schemas (a test fails if it's stale) |
 | `npm run admin:create -- --email … --name …` | create a super admin (`--reset` for a new password) |
 | `npm run db:indexes` | create missing indexes (additive only) |
 

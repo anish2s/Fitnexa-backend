@@ -9,6 +9,7 @@ import {
   notWhileImpersonating,
 } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
+import { documentsHeader } from '../../lib/route-meta.js';
 import { auditContextFrom } from '../audit/audit.service.js';
 import { membershipIdParams } from '../memberships/membership.schemas.js';
 import type { GatewayService } from './gateway.service.js';
@@ -108,15 +109,24 @@ export function gatewayRouters(deps: { jwt: JwtConfig; gateway: GatewayService }
   );
 
   const webhooks = Router();
-  webhooks.post('/razorpay', async (req, res) => {
-    if (!req.tenant) throw Errors.notFound('Webhook');
-    const result = await g.webhook(
-      req.rawBody,
-      req.get('X-Razorpay-Signature'),
-      req.get('X-Razorpay-Event-Id'),
-    );
-    ok(res, result);
-  });
+  webhooks.post(
+    '/razorpay',
+    documentsHeader(
+      'X-Razorpay-Signature',
+      true,
+      "HMAC-SHA256 of the raw body with the gym's webhook secret.",
+    ),
+    documentsHeader('X-Razorpay-Event-Id', false, 'Used to ignore repeated deliveries.'),
+    async (req, res) => {
+      if (!req.tenant) throw Errors.notFound('Webhook');
+      const result = await g.webhook(
+        req.rawBody,
+        req.get('X-Razorpay-Signature'),
+        req.get('X-Razorpay-Event-Id'),
+      );
+      ok(res, result);
+    },
+  );
 
   return { settings, deskOrders, memberOrders, verify, webhooks };
 }

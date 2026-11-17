@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { JwtConfig } from '../../auth/jwt.js';
 import { authenticate, authorize } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
+import { documentsHeader } from '../../lib/route-meta.js';
 import { memberIdParams } from '../members/member.schemas.js';
 import type { AuditService } from '../audit/audit.service.js';
 import type { Env } from '../../config/env.js';
@@ -40,6 +41,11 @@ export function membershipRouters(deps: { jwt: JwtConfig; audit: AuditService; e
     '/:id/memberships',
     auth,
     manage,
+    documentsHeader(
+      'Idempotency-Key',
+      'conditional',
+      'Required when the body includes `payment` (sell and collect in one step).',
+    ),
     validate({ params: memberIdParams, body: s.sellBody }),
     c.create,
   );
@@ -47,6 +53,11 @@ export function membershipRouters(deps: { jwt: JwtConfig; audit: AuditService; e
     '/:id/memberships/renew',
     auth,
     manage,
+    documentsHeader(
+      'Idempotency-Key',
+      'conditional',
+      'Required when the body includes `payment` (sell and collect in one step).',
+    ),
     validate({ params: memberIdParams, body: s.renewBody }),
     c.renew,
   );
