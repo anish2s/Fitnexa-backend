@@ -10,6 +10,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run format:check
       # REQUIRE_DB=1: a missing MongoDB must fail CI, never silently skip isolation tests.
       - run: npm test
         env: { REQUIRE_DB: '1' }

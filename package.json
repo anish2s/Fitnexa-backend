@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "lint": "eslint src tests",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "format:check": "prettier --check src tests"
   },
   "dependencies": {
     "cors": "^2.8.6",
@@ -47,7 +48,7 @@
     "typescript-eslint": "^8.72.2",
     "vitest": "^5.1.0"
   },
-  "description": "Multi-tenant Gym SaaS — backend API (Express + MongoDB)",
+  "description": "Multi-tenant Gym SaaS \u2014 backend API (Express + MongoDB)",
   "engines": {
     "node": ">=22"
   }

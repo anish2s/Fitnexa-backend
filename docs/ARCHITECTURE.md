@@ -1,6 +1,6 @@
 # Architecture
 
-_Last updated: 2026-11-17 · Phase 1, Milestone 5_
+_Last updated: 2026-11-17 · Phase 1, Milestones 1–9 built_
 
 ## 1. Whiteboard assessment
 
@@ -14,15 +14,15 @@ sensible postpone list. The gaps below are the things that would bite during the
 |---|-----|----------------|------------|
 | 1 | **Where the API lives relative to gym subdomains** | If the API is `api.yourapp.in`, the Host header no longer identifies the gym. | API is served **same-origin** under `/api` on every gym host (`powerhouse.yourapp.in/api/...`). Tenant comes from the host; auth cookies stay host-only. See §3. |
 | 2 | **Member login method** | Indian gym members rarely use email; SMS OTP needs DLT registration and per-message cost. | **Decided 2026-11-13: one-time email link** (Resend). Members without email are managed by the front desk without app access. ✅ M2/M4 |
-| 3 | **Two different Razorpay flows** | The whiteboard says "you bill each gym monthly" (platform billing). Members paying *their gym* online is a separate flow and needs money to land in the **gym's** account. | MVP: gyms record cash/UPI/card at the desk. Member online payments use the gym's own Razorpay keys (stored encrypted) behind a feature flag. Platform billing stays manual (Razorpay payment links) until ~10 gyms. |
+| 3 | **Two different Razorpay flows** | The whiteboard says "you bill each gym monthly" (platform billing). Members paying *their gym* online is a separate flow and needs money to land in the **gym's** account. | Gyms record cash/UPI/card/bank at the desk ✅ M6. Online payments use the gym's **own** Razorpay keys (encrypted at rest), switched on per gym by connecting keys; test keys only until `RAZORPAY_ALLOW_LIVE` ✅ M6. Platform billing stays manual (Razorpay payment links) until ~10 gyms. |
 | 4 | **Member import** | Onboarding step 2 ("import from Excel or register book") has no API in the module list. "New gym live in under 1 day" depends on it. | CSV import endpoint with dry-run + per-row error report, all-or-nothing. ✅ M4 |
-| 5 | **Receipt numbering** | GST-style receipts need gap-free, per-gym, per-financial-year sequences. | `counters` collection with atomic `$inc` inside the payment transaction. |
-| 6 | **Idempotent payments** | Double-tap on "Record payment" or webhook retries create duplicate payments. | `Idempotency-Key` header + unique index; Razorpay ids unique per tenant. |
-| 7 | **Job safety** | node-cron in-process runs the job once **per instance**; two instances = duplicate reminders. | Mongo lease lock (`jobLocks`) per job run. No Redis needed. |
+| 5 | **Receipt numbering** | GST-style receipts need gap-free, per-gym, per-financial-year sequences. | `counters` collection with atomic `$inc` inside the payment transaction ✅ M6 |
+| 6 | **Idempotent payments** | Double-tap on "Record payment" or webhook retries create duplicate payments. | `Idempotency-Key` header (required) + unique index; Razorpay ids unique per tenant ✅ M6 |
+| 7 | **Job safety** | node-cron in-process runs the job once **per instance**; two instances = duplicate reminders. | Mongo lease lock (`jobLocks`) per job run. No Redis needed ✅ M9 |
 | 8 | **"Log in as owner (audited)"** | Impersonation is a privilege-escalation path if done casually. | Short-lived impersonation session, separate claim, banner in UI, every action audited with both actor ids. ✅ M3 |
-| 9 | **Time zones** | "Today's attendance", "expires today" must use the gym's day (IST), not UTC. | `settings.timezone` per gym; attendance stores a precomputed local `day`. |
-| 10 | **DPDP Act operations** | Risk table says "record consent, export and delete on request" but no component does it. | Consent recorded at registration ✅ M4; export + erase endpoints (Milestone 9). |
-| 11 | **Backups / observability** | Not on the board. | Atlas continuous backup; structured logs with request ids now; error tracking (Sentry free tier) at deploy time. |
+| 9 | **Time zones** | "Today's attendance", "expires today" must use the gym's day (IST), not UTC. | `settings.timezone` per gym; attendance stores a precomputed local `day`; reports bucket by gym-local day ✅ |
+| 10 | **DPDP Act operations** | Risk table says "record consent, export and delete on request" but no component does it. | Consent recorded at registration ✅ M4; owner/member export and owner erase (financial records kept anonymised) ✅ M9 |
+| 11 | **Backups / observability** | Not on the board. | Structured logs with request ids ✅; Atlas continuous backup and error tracking (Sentry free tier) at deploy time (M10). |
 | 12 | **Frontend tech mismatch** | Whiteboard says "React PWA"; brief says Next.js. | Following the brief: Next.js for both apps (Phase 2/3). |
 
 ### Security problems found in the plan
@@ -32,11 +32,11 @@ See [SECURITY.md](SECURITY.md) for the full threat list. Headline items:
 1. **Tenant from the client.** Solved structurally: tenant comes only from the host; a Mongoose plugin
    forces `tenantId` into every query and **fails closed** when no tenant is in context.
 2. **Token replay across gyms.** A Gym B token sent to Gym A's host must be rejected. Tokens will carry
-   `tenantId`; auth middleware requires it to equal the resolved host tenant (Milestone 2).
+   `tenantId`; auth middleware requires it to equal the resolved host tenant ✅.
 3. **Super-admin reach.** Super admins are a separate collection and can only authenticate on the
    platform host (`admin.yourapp.in`), never on a gym host.
-4. **Static QR codes.** A screenshot of a member ID QR would let anyone check in. QR passes will be
-   short-lived HMAC-signed tokens (Milestone 7).
+4. **Static QR codes.** A screenshot of a member ID QR would let anyone check in. QR passes are
+   30-second HMAC-signed tokens with a per-gym key, accepted for ~60–90 s ✅.
 5. **JWTs in localStorage** are readable by any XSS. Refresh tokens go in host-only, `HttpOnly`,
    `Secure`, `SameSite=Lax` cookies; access tokens are short-lived (15 min) and kept in memory.
 6. **Webhook spoofing.** Razorpay webhooks are verified against the raw body signature and de-duplicated.
@@ -70,8 +70,8 @@ Cloudflare (*.yourapp.in, TLS) ──► Next.js app ──rewrite /api──►
                                                                   │
  helmet → request id + log → CORS → rate limit → JSON body        │
  → resolveTenant(host)  ── opens AsyncLocalStorage tenant scope ──┤
- → [authenticate: token.tenantId must equal host tenant]   (M2)   │
- → [authorize: role/permission]                            (M2)   │
+ → [authenticate: token.tenantId must equal host tenant]          │
+ → [authorize: role/permission]                                   │
  → validate(zod) → controller → service                           │
  → Mongoose models with tenantScopePlugin ── tenantId forced ─────┤
  → 404 → error handler (stable envelope, no internals)            ▼
@@ -112,11 +112,18 @@ gym-saas-api/
 │   ├── config/           # env schema (zod)
 │   ├── db/               # connection
 │   ├── lib/              # errors, response envelope, logger, money, dates, csv, mailer, image store
-│   ├── middleware/       # cors, validate, error handler, authenticate/authorize
+│   ├── middleware/       # cors, validate, error handler, authenticate/authorize, same-origin
 │   ├── tenancy/          # host parsing, resolver, context, tenant-scope plugin
+│   ├── jobs/             # lease-locked scheduler (node-cron) and job definitions
+│   ├── scripts/          # seed, create-indexes, create-platform-admin
 │   └── modules/          # feature modules: routes · controller · service · model · schemas
-│       ├── health/
-│       └── tenants/
+│       ├── health/ tenants/ platform/ auth/ users/ audit/           (M1–M3)
+│       ├── staff/ members/ uploads/ counters/                        (M4)
+│       ├── plans/ memberships/                                       (M5)
+│       ├── payments/  (desk payments, receipts, refunds, Razorpay)   (M6)
+│       ├── attendance/                                               (M7)
+│       ├── reports/                                                  (M8)
+│       └── notifications/ whatsapp/ privacy/                         (M9)
 ├── tests/                # unit/ http/ integration/ helpers/
 ├── docs/
 └── .github/workflows/ci.yml

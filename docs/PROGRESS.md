@@ -153,3 +153,8 @@ depend on the backend.
   app's own code 7/7: signed upload accepted at the server-chosen path, the same signature with a
   different path (another gym's folder) refused by Cloudinary, overwrite blocked, delivery URL serves
   the image, app delete removes it. Config now rejects truncated API secrets at startup.
+- **2026-11-17** — M1–M9 audit: gate green (369 tests); `npm audit` 0 vulnerabilities (runtime and
+  dev, after a non-breaking `npm audit fix` of dev tooling); CI now also checks formatting; stale docs
+  updated (ARCHITECTURE status/tree, DATABASE plan note, SECURITY/DATABASE headers, README).
+  Remaining before the Phase 1 gate: live Resend email, live Razorpay test payment (both need
+  credentials), two open owner decisions, and M10.

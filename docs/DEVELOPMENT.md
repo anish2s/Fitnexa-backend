@@ -48,6 +48,7 @@ The super admin signs in on `admin.localhost:4000`.
 | `npm run format` | Prettier |
 | `npm run build` / `npm start` | compile to `dist/` and run it |
 | `npm run seed` | demo data (refuses in production, never overwrites) |
+| `npm run format:check` | Prettier check (CI runs it; `npm run format` fixes) |
 | `npm run admin:create -- --email … --name …` | create a super admin (`--reset` for a new password) |
 | `npm run db:indexes` | create missing indexes (additive only) |
 
@@ -69,3 +70,8 @@ The super admin signs in on `admin.localhost:4000`.
 - Money in paise (integers). Dates stored UTC; "day" logic uses the gym's timezone.
 - Throw `Errors.*` / `AppError` for expected failures; let the error handler format responses.
 - New endpoint ⇒ Zod schemas + tests (happy path, validation, authorization, cross-tenant).
+
+## Scheduled jobs in development
+`npm run dev` starts the reminder jobs too (`JOBS_ENABLED=true` by default). With the `log` mail
+transport, reminder emails only appear in the API log. Set `JOBS_ENABLED=false` in `.env` to keep the
+log quiet while working on something else.

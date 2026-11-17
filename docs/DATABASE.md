@@ -1,6 +1,6 @@
 # Database
 
-_Last updated: 2026-11-13 · Phase 1, Milestone 2_
+_Last updated: 2026-11-17 · Phase 1, Milestones 1–9_
 
 Shared MongoDB database, shared collections. Every tenant-owned collection uses `tenantScopePlugin`
 (`src/tenancy/tenant-scope.plugin.ts`), which adds a required, indexed, immutable `tenantId` and
@@ -20,6 +20,11 @@ Status legend: ✅ implemented & tested · 🟡 implemented, DB tests not yet ru
 - `timestamps: true` on every schema (`createdAt`, `updatedAt`).
 
 ## Review of the proposed schema (spec §7 and whiteboard)
+
+> This is the **original plan** written in Milestone 1. Names and some fields changed during
+> implementation (for example plans use `taxMode` + `gstRate`, payments compute the GST split for the
+> receipt instead of storing it, notifications store no payload). The collection sections below
+> describe what is actually built.
 
 | Collection | Change | Reason |
 |------------|--------|--------|

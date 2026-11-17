@@ -1,6 +1,6 @@
 # Security
 
-_Last updated: 2026-11-17 · Phase 1, Milestone 5_
+_Last updated: 2026-11-17 · Phase 1, Milestones 1–9 (Cloudinary verified live)_
 
 All ✅ items are covered by automated tests that run against a real MongoDB 8.0 server.
 
