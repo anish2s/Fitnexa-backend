@@ -130,7 +130,15 @@ export const envSchema = z
       .trim()
       .regex(/^\d{6,32}$/, 'Invalid Cloudinary API key')
       .optional(),
-    CLOUDINARY_API_SECRET: z.string().trim().min(10).optional(),
+    /** Cloudinary secrets are ~27 URL-safe characters; a shorter value is almost always a bad copy. */
+    CLOUDINARY_API_SECRET: z
+      .string()
+      .trim()
+      .regex(
+        /^[A-Za-z0-9_-]{20,64}$/,
+        'Invalid Cloudinary API secret (copy the full value from Settings → API Keys)',
+      )
+      .optional(),
     /** Top-level folder, so dev and production uploads never mix in one Cloudinary account. */
     CLOUDINARY_FOLDER: z
       .string()

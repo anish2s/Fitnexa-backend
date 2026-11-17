@@ -103,6 +103,17 @@ describe('cloudinary config', () => {
     JWT_ACCESS_SECRET: 'x'.repeat(48),
   };
 
+  it('rejects a truncated API secret at startup', () => {
+    expect(() =>
+      parseEnv({
+        ...base,
+        CLOUDINARY_CLOUD_NAME: 'demo',
+        CLOUDINARY_API_KEY: '123456789012',
+        CLOUDINARY_API_SECRET: 'abcdefghij',
+      }),
+    ).toThrow(/Invalid Cloudinary API secret/);
+  });
+
   it('is optional, but all three values go together', () => {
     expect(createImageStore(parseEnv(base), logger)).toBeNull();
     expect(() => parseEnv({ ...base, CLOUDINARY_CLOUD_NAME: 'demo' })).toThrow(/together/);
@@ -110,7 +121,7 @@ describe('cloudinary config', () => {
       ...base,
       CLOUDINARY_CLOUD_NAME: 'demo',
       CLOUDINARY_API_KEY: '123456789012',
-      CLOUDINARY_API_SECRET: 'abcdefghijklmnop',
+      CLOUDINARY_API_SECRET: 'abcdefghijklmnopqrstuvwxyz1',
     });
     expect(createImageStore(env, logger)?.gymPrefix('g1')).toBe('gym-saas-dev/gyms/g1');
   });
