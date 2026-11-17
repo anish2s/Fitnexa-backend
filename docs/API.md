@@ -28,6 +28,7 @@ Every response carries `X-Request-Id`.
 | 413 | `PAYLOAD_TOO_LARGE` | body > 100 kb |
 | 503 | `UPLOADS_NOT_CONFIGURED` | Cloudinary credentials not set |
 | 422 | `VALIDATION_ERROR` | `details: [{ path, message }]` |
+| 422 | `IMPORT_INVALID` | CSV import had bad rows; `details` = row report; nothing written |
 | 429 | `RATE_LIMITED`, `LOGIN_LOCKED` | |
 | 500 | `INTERNAL_ERROR` | no internals exposed |
 
@@ -158,7 +159,7 @@ Actions so far: `auth.login`, `auth.account_locked`, `auth.invite_accepted`, `au
 `impersonation.start`, `impersonation.end`, `staff.create`, `staff.update`,
 `staff.permissions_update`, `staff.deactivate`, `staff.activate`, `staff.invite`, `member.create`,
 `member.update`, `member.self_update`, `member.archive`, `member.restore`, `member.photo_update`,
-`member.photo_remove`. Member names, birth dates,
+`member.photo_remove`, `member.import`. Member names, birth dates,
 notes and emergency contacts are also shown as `[hidden]`.
 
 ## Staff — `/api/v1/staff` (gym host)
@@ -209,6 +210,24 @@ same gym with the same email (`409 DUPLICATE`).
   `appAccess: { enabled, reason: null|no_email|archived, lastLoginAt }`.
 - Phone and email are unique per gym, including archived members (restore them instead of
   re-registering). The same person can be a member of two gyms.
+
+### CSV import — `POST /members/import` (`members:import`)
+
+Body: the CSV file itself, `Content-Type: text/csv` (max 1 MB, 2,000 rows).
+Query: `dryRun=true` (default) validates only; `dryRun=false&consentConfirmed=true` imports.
+
+Columns (header row, any order, case-insensitive): **`name`**, **`phone`** (or `mobile`), `email`,
+`gender`, `date_of_birth` (or `dob`), `join_date`, `emergency_contact_name`,
+`emergency_contact_phone`, `emergency_contact_relation`, `notes`. Dates as `YYYY-MM-DD` or
+`DD/MM/YYYY`. Unknown columns are ignored. Excel CSV exports (with BOM, quoted cells) work.
+
+Report: `{ dryRun, total, valid, errorCount, errors: [{ row, field, message }], created, firstCode?, lastCode? }`.
+`row` is the line number as the spreadsheet shows it (header = 1). Checks: each row like the
+registration form, duplicate phone/email within the file, and clashes with this gym's members and logins.
+
+**All or nothing:** if any row has an error, a real import returns `422 IMPORT_INVALID` with the
+report in `error.details` and writes nothing. A clean real import returns `201`. Missing
+`consentConfirmed=true` → `422`. Bad file (empty, no `name`/`phone` column, too many rows) → `400`.
 
 Member detail: `{ id, memberCode, name, phone, email, gender, dateOfBirth, joinDate,
 emergencyContact, photoUrl, notes, consent{ at, version }, appAccess, archivedAt, createdAt, updatedAt }`.

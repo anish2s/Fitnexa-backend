@@ -7,9 +7,14 @@ import type {
   SelfUpdateInput,
   UpdateMemberInput,
 } from './member.schemas.js';
+import { Errors } from '../../lib/errors.js';
+import type { createMemberImporter } from './member.import.js';
 import type { MemberService } from './member.service.js';
 
-export function createMemberController(members: MemberService) {
+export function createMemberController(
+  members: MemberService,
+  importer: ReturnType<typeof createMemberImporter>,
+) {
   const idOf = (req: Request) => (req.valid.params as { id: string }).id;
   const noStore = (res: Response) => res.set('Cache-Control', 'no-store');
 
@@ -47,6 +52,15 @@ export function createMemberController(members: MemberService) {
     },
     async restore(req: Request, res: Response) {
       ok(res, await members.restore(idOf(req), auditContextFrom(req)));
+    },
+    async importCsv(req: Request, res: Response) {
+      if (typeof req.body !== 'string' || !req.body.trim()) {
+        throw Errors.badRequest('Send the CSV file as the request body (Content-Type: text/csv)');
+      }
+      const opts = req.valid.query as { dryRun: boolean; consentConfirmed: boolean };
+      const report = await importer.run(req.body, opts, auditContextFrom(req));
+      if (!opts.dryRun && report.errorCount) throw Errors.importInvalid(report);
+      ok(res, report, opts.dryRun ? 200 : 201);
     },
     async getSelf(req: Request, res: Response) {
       noStore(res);

@@ -27,7 +27,8 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 | Gym credentials, email links, reset links and refresh cookies only work on their own gym's host | ✅ | same |
 | Super admins: separate collection, authenticate only on the platform host; gym tokens rejected there | ✅ | same |
 | CORS: a gym's origin may only call its own host (no cross-gym credentialed requests) | ✅ | `middleware/cors.ts`, `tests/http/app.test.ts` |
-| Every new tenant model gets the cross-tenant suite | ⬜ M4+ | |
+| Every model is classified scoped/platform; scoped models proven isolated for list, count, fetch, aggregate, update, delete (a new unclassified model fails CI) | ✅ | `tests/integration/all-models-isolation.int.test.ts` |
+| Every index on a scoped model starts with `tenantId` (TTL indexes excepted) | ✅ | same |
 
 ## Transport, headers, input
 
@@ -100,6 +101,7 @@ Notes for the frontend (Phase 2/3):
 | Photo confirmation accepts only ids under this gym + member prefix with the issued name shape (no traversal) | ✅ |
 | Cloudinary secret never returned; image bytes never pass through the API | ✅ |
 | Live upload against Cloudinary | 🟡 blocked: needs credentials |
+| CSV import: 1 MB / 2,000-row cap, parsed in memory without eval, same validation as the form, all-or-nothing transaction, needs `members:import` | ✅ |
 
 ## Email ✅ (transport) · 🟡 (live delivery)
 

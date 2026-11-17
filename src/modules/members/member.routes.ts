@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import type { JwtConfig } from '../../auth/jwt.js';
 import { authenticate, authorize } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
@@ -7,6 +7,7 @@ import type { AuditService } from '../audit/audit.service.js';
 import { photoBody } from '../uploads/upload.schemas.js';
 import { createMemberController } from './member.controller.js';
 import * as s from './member.schemas.js';
+import { createMemberImporter } from './member.import.js';
 import { createMemberService } from './member.service.js';
 
 /** /api/v1/members — front desk member management, plus /members/me for the member app. */
@@ -15,7 +16,7 @@ export function memberRouter(deps: {
   audit: AuditService;
   images: ImageStore | null;
 }) {
-  const c = createMemberController(createMemberService(deps));
+  const c = createMemberController(createMemberService(deps), createMemberImporter(deps));
   const router = Router();
   router.use(authenticate(deps.jwt));
   const byId = validate({ params: s.memberIdParams });
@@ -26,6 +27,14 @@ export function memberRouter(deps: {
 
   router.get('/', authorize('members:read'), validate({ query: s.memberListQuery }), c.list);
   router.post('/', authorize('members:create'), validate({ body: s.createMemberBody }), c.create);
+  // Raw CSV body (a spreadsheet export), not JSON; 1 MB is ~2,000 rows with every column.
+  router.post(
+    '/import',
+    authorize('members:import'),
+    express.text({ type: ['text/csv', 'text/plain'], limit: '1mb' }),
+    validate({ query: s.importQuery }),
+    c.importCsv,
+  );
   router.get('/:id', authorize('members:read'), byId, c.get);
   router.patch(
     '/:id',

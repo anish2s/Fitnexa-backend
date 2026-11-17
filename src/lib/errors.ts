@@ -27,6 +27,14 @@ export const Errors = {
   notFound: (entity = 'Resource') => new AppError(404, 'NOT_FOUND', `${entity} not found`),
   conflict: (message: string, details?: unknown) => new AppError(409, 'CONFLICT', message, details),
   tenantNotFound: () => new AppError(404, 'TENANT_NOT_FOUND', 'Gym not found'),
+  /** A real import with any bad row writes nothing; `details` is the full row report. */
+  importInvalid: (report: unknown) =>
+    new AppError(
+      422,
+      'IMPORT_INVALID',
+      'Fix the rows listed and upload again. Nothing was imported.',
+      report,
+    ),
   uploadsNotConfigured: () =>
     new AppError(503, 'UPLOADS_NOT_CONFIGURED', 'Image uploads are not configured yet'),
   tenantRequired: () =>

@@ -93,3 +93,14 @@ export type MemberListQuery = z.infer<typeof memberListQuery>;
 export type CreateMemberInput = z.infer<typeof createMemberBody>;
 export type UpdateMemberInput = z.infer<typeof updateMemberBody>;
 export type SelfUpdateInput = z.infer<typeof selfUpdateBody>;
+
+export const importQuery = z.object({
+  dryRun: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .default(true),
+  consentConfirmed: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .default(false),
+});

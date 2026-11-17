@@ -5,7 +5,7 @@ _Last updated: 2026-11-13_
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
 ## Current position
-**Phase 1 — Backend. Milestones 1–3 complete and verified against a real MongoDB 8.0. Milestone 4 in progress.**
+**Phase 1 — Backend. Milestones 1–4 complete and verified against a real MongoDB 8.0 (live email and image upload blocked on credentials). Milestone 5 next.**
 
 ## Decisions
 - [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
@@ -55,13 +55,13 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] `auditLogs` (per gym, readable by the owner) + `platformAuditLogs`; append-only at the model layer; field-level changes with email/phone masked; hooks on login, lockout, invite/reset, password change, logout-all, all M3 actions
 - [x] 172 tests passing on real MongoDB (29 new M3 integration tests incl. cross-tenant and role checks); typecheck, lint, build
 
-### M4 — Staff & member management
+### M4 — Staff & member management ✅ (except two items blocked on credentials)
 - [~] **Real email provider: Resend** (moved up from M9). Transport, config validation, failure handling done and tested with a fake API; **blocked** on live delivery until a Resend API key and verified sending domain exist (see DEPLOYMENT.md)
 - [x] Staff CRUD, deactivate (ends sessions), activate, re-invite, permission overrides (grantable list only); 11 integration tests incl. IDOR + cross-tenant
 - [x] Members CRUD, archive/restore, search, pagination, profile, member self-profile (`/members/me`), consent capture, per-gym member codes, login kept in step with email; 12 integration tests incl. IDOR, cross-tenant, concurrent codes
 - [~] Cloudinary signed uploads (logo, app icon, member photo): signing, path checks, photo set/replace/remove with old-image deletion; 13 tests (signing verified against Cloudinary's documented example, network faked). **Blocked** on live upload until Cloudinary credentials exist
-- [ ] CSV member import with dry-run + error report
-- [ ] Cross-tenant suite for every model
+- [x] CSV member import: dry run, per-row error report (line + column), in-file and in-gym duplicate checks, Indian date formats, all-or-nothing transaction, consent confirmation; 10 tests
+- [x] Cross-tenant suite for **every** model: classifies all models (a new unscoped model fails CI), checks every index starts with `tenantId`, and proves FitZone can't list/count/fetch/aggregate/update/delete Powerhouse rows in any collection
 
 ### M5 — Plans & memberships
 - [ ] Plans CRUD (days, price, GST inclusive/exclusive)
@@ -111,3 +111,9 @@ depend on the backend.
 - **2026-11-17** — Owner decisions: Resend, 1-year audit retention, app-level append-only accepted.
   Added 1-year TTL on audit logs, Resend transport, and fixed a latent account-enumeration path
   (provider errors would have turned 202 into 500 only for registered emails). 181 tests passing.
+- **2026-11-17** — M4 built in four commits: staff, members (+ member self-profile, consent, login
+  sync, per-gym codes), Cloudinary signed uploads, CSV import; plus a cross-tenant suite over every
+  model. 232 tests passing. Blocked on owner: Resend key + domain, Cloudinary credentials.
+  Not yet smoke-tested against the compiled server (M3, M4).
+  Note: the dev machine runs Node 20; Vitest's failure printer needs Node 21+ (`Map.groupBy`), so
+  failing tests crash the reporter there. Use Node 22 (the project's target) locally.
