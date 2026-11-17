@@ -29,6 +29,7 @@ import { planRouter } from './modules/plans/plan.routes.js';
 import { notificationRouter } from './modules/notifications/notification.routes.js';
 import { createNotificationService } from './modules/notifications/notification.service.js';
 import { reportRouters } from './modules/reports/report.routes.js';
+import { whatsappRouter } from './modules/whatsapp/whatsapp.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
 import { uploadRouter } from './modules/uploads/upload.routes.js';
 import { gymRouter } from './modules/tenants/gym.routes.js';
@@ -135,7 +136,7 @@ export function createApp(deps: AppDeps) {
   v1.use('/gym', gymRouter({ jwt, audit }));
   v1.use('/audit-logs', auditRouter({ jwt, audit }));
   v1.use('/staff', staffRouter({ jwt, auth, audit }));
-  const ms = membershipRouters({ jwt, audit });
+  const ms = membershipRouters({ jwt, audit, env });
   const gateway = createGatewayService({
     env,
     audit,
@@ -145,6 +146,7 @@ export function createApp(deps: AppDeps) {
   const gw = gatewayRouters({ jwt, gateway });
   const pay = paymentRouters({ jwt, audit, gateway });
   v1.use('/members', ms.perMember);
+  v1.use('/members', whatsappRouter({ jwt, env }));
   const att = attendanceRouters({ jwt, passes: createPassSigner(qrMasterSecret(env)) });
   v1.use('/members', att.perMember);
   v1.use('/attendance', att.attendance);

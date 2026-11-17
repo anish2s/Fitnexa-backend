@@ -20,6 +20,8 @@ import type { LeanPlan } from '../plans/plan.service.js';
 import { Tenant } from '../tenants/tenant.model.js';
 import { User } from '../users/user.model.js';
 import { Membership } from './membership.model.js';
+import type { Env } from '../../config/env.js';
+import { messageFor, waLink } from '../whatsapp/whatsapp.js';
 import { gymPaymentSettings, insertPayment, isDuplicateKey } from '../payments/payment.ledger.js';
 import { Payment } from '../payments/payment.model.js';
 import type { OfflinePaymentInput } from '../payments/payment.schemas.js';
@@ -175,7 +177,7 @@ export async function membershipSummary(memberId: Types.ObjectId | string, today
   };
 }
 
-export function createMembershipService(deps: { audit: AuditService }) {
+export function createMembershipService(deps: { audit: AuditService; env?: Env }) {
   const { audit } = deps;
 
   async function liveMember(id: string | Types.ObjectId) {
@@ -596,8 +598,28 @@ export function createMembershipService(deps: { audit: AuditService }) {
       pipeline,
     );
     const total = out?.total[0]?.n ?? 0;
+    const items = await withMembers(out?.rows ?? [], today);
+    // Ready-made "please renew" WhatsApp link per row for the desk (nothing is sent by us).
+    const gym = deps.env
+      ? await Tenant.findById(requireTenantId()).select('name slug').lean()
+      : null;
     return {
-      items: await withMembers(out?.rows ?? [], today),
+      items: items.map((row) => {
+        if (!gym || !row.member) return { ...row, whatsappUrl: null };
+        const text = messageFor('renewal', {
+          gymName: gym.name,
+          appUrl: deps.env!.GYM_APP_URL_TEMPLATE.replace('{slug}', gym.slug),
+          memberName: row.member.name,
+          memberCode: row.member.memberCode,
+          membership: {
+            plan: row.plan.name,
+            endDate: row.endDate!,
+            ended: false,
+            balancePaise: row.balancePaise,
+          },
+        });
+        return { ...row, whatsappUrl: text ? waLink(row.member.phone, text) : null };
+      }),
       meta: { ...pageMeta(q, total), days, until: formatDateOnly(until) },
     };
   }

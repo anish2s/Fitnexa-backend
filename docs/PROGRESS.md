@@ -90,7 +90,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 
 ### M9 — Jobs, notifications, privacy
 - [x] node-cron + Mongo lease lock (jobs run once across instances); renewal reminder queue (expiring + expired) with retries/backoff, send hours, send-time re-checks, owner queue view/retry/cancel, on/off setting; 4 runner + 8 reminder tests
-- [ ] WhatsApp `wa.me` link generation
+- [x] WhatsApp `wa.me` links (renewal, payment due, welcome, custom); ready link on every expiring-soon row; 7 tests
 - [ ] DPDP export / erase
 
 ### M10 — Hardening & Phase 1 gate

@@ -445,6 +445,18 @@ Two scheduled jobs (see DEPLOYMENT.md) email members automatically:
 | `POST /notifications/:id/retry` | same | failed/skipped → queued (`409` otherwise) |
 | `POST /notifications/:id/cancel` | same | queued → cancelled (`409` otherwise) |
 
+## WhatsApp links (gym host)
+
+`GET /members/:id/whatsapp?template=renewal|payment_due|welcome|custom&text=` (`members:read`) →
+`{ template, phone, text, url }` where `url` is `https://wa.me/<digits>?text=<encoded>`. The desk opens
+it and sends from the gym's own WhatsApp; the server sends nothing and there is no API cost.
+
+- `renewal`: "your <plan> membership at <gym> ends on / ended on <date> … <app link>"
+- `payment_due`: "a balance of ₹1,000 is due …" (`409` if nothing is due)
+- `welcome`: member code and app link; `custom`: your own `text` (≤ 1000 chars)
+- `409` for `renewal`/`payment_due` when the member has no membership.
+- `GET /memberships/expiring` rows include a ready `whatsappUrl` (renewal message).
+
 ## Image uploads — `/api/v1/uploads` (gym host)
 
 Images go straight from the browser to Cloudinary; the API only signs the upload.
