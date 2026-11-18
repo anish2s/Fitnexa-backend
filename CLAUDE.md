@@ -1,11 +1,15 @@
-# CLAUDE.md — gym-saas-api
+# CLAUDE.md — fitexaa-backend
 
-Backend for a multi-tenant, white-label Gym Management SaaS (India first). One API, one MongoDB,
+Backend for **Fitexaa**, a multi-tenant, white-label gym management SaaS (India first). One API, one MongoDB,
 many gyms on their own subdomains (`powerhouse.yourapp.in`). Frontends live in a separate repo,
-`gym-saas-web`, and use this API only over REST.
+`fitexaa-web`, and use this API only over REST.
 
 **Read `docs/PROGRESS.md` first** — it is the source of truth for what is done and what is next.
 Architecture: `docs/ARCHITECTURE.md`. Security controls: `docs/SECURITY.md`. Schema: `docs/DATABASE.md`.
+
+White-label: "Fitexaa" is the platform's name for the super admin side, docs and tooling only.
+Gym-facing screens and member emails show only the gym's own brand (emails go out under the
+gym's name; see `senderFor` in `src/lib/mailer.ts`).
 
 ## Your role and the rules (from the owner's brief)
 

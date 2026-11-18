@@ -292,8 +292,8 @@ async function main() {
     const anyCreated = r.admin.created || r.gyms.some((g) => g.created);
     const lines = [
       '',
-      'Demo data',
-      '---------',
+      'Fitexaa demo data',
+      '-----------------',
       `Super admin  ${r.admin.email}  (${r.admin.created ? 'created' : 'already existed'})  → http://admin.localhost:4000`,
       ...DEMO_GYMS.map((g) => {
         const status = r.gyms.find((x) => x.slug === g.slug)?.created

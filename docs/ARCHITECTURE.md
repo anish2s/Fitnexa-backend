@@ -96,8 +96,8 @@ Key properties:
 
 | Repo | Contains | Deploys as |
 |---|---|---|
-| `gym-saas-api` (this repo) | Express + MongoDB backend | API service |
-| `gym-saas-web` | Admin dashboard (Phase 2) and member PWA (Phase 3), as two Next.js apps in one repo | Web service(s) |
+| `fitexaa-backend` (this repo) | Express + MongoDB backend | API service |
+| `fitexaa-web` | Admin dashboard (Phase 2) and member PWA (Phase 3), as two Next.js apps in one repo | Web service(s) |
 
 **The contract between them is the OpenAPI spec** this repo publishes (Milestone 10, served at
 `/api/v1/openapi.json`). The web repo generates its TypeScript API types from that spec, so the
@@ -105,7 +105,7 @@ frontend never hand-copies backend types and never duplicates business logic. AP
 break the contract are versioned (`/api/v2`) or released backend-first.
 
 ```
-gym-saas-api/
+fitexaa-backend/
 ├── src/
 │   ├── app.ts            # builds the Express app (dependency-injected, testable)
 │   ├── server.ts         # process entry: env, DB, listen, graceful shutdown

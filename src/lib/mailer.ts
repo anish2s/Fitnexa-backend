@@ -7,6 +7,28 @@ export interface MailMessage {
   text: string;
   /** Tag for tests/observability, e.g. 'magic_link'. Never contains secrets. */
   kind: string;
+  /**
+   * Sender display name. Gym mail passes the gym's name so members only ever see their gym's
+   * brand; the address always comes from MAIL_FROM (the verified sending domain).
+   */
+  fromName?: string;
+}
+
+/**
+ * `"Name" <address>` with the address from MAIL_FROM. Gym names are typed by owners and land in a
+ * mail header, so control characters (header injection) and characters that would break the
+ * quoting or the address part are removed. Falls back to MAIL_FROM unchanged.
+ */
+export function senderFor(mailFrom: string, fromName?: string): string {
+  const name = (fromName ?? '')
+    .replace(/[\p{Cc}"\\<>]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 64)
+    .trim();
+  if (!name) return mailFrom;
+  const address = /<([^<>]+)>\s*$/.exec(mailFrom)?.[1]?.trim() ?? mailFrom.trim();
+  return `"${name}" <${address}>`;
 }
 
 /**
@@ -24,7 +46,7 @@ export function logMailer(logger: Logger): Mailer {
   return {
     async send(m) {
       logger.info(
-        { mail: { to: m.to, subject: m.subject, kind: m.kind } },
+        { mail: { to: m.to, from: m.fromName ?? null, subject: m.subject, kind: m.kind } },
         `EMAIL (dev, not sent)\n${m.text}`,
       );
     },
@@ -93,7 +115,7 @@ export function resendMailer(opts: ResendOptions): Mailer {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: opts.from,
+            from: senderFor(opts.from, m.fromName),
             to: [m.to],
             subject: m.subject,
             text: m.text,

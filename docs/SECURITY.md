@@ -60,6 +60,7 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 | Cookie endpoints reject cross-origin / `Sec-Fetch-Site: cross-site` requests (CSRF between sibling gym subdomains) | ✅ |
 | Member email links: 256-bit, hashed at rest, single use (atomic consume, concurrent clicks give one session), 15 min, max 3 per 15 min, gym-bound | ✅ |
 | Link/forgot endpoints never reveal whether an email is registered | ✅ |
+| Gym emails use the gym's name as the sender display name; it is stripped of control characters, quotes, `\\` and `<>` and capped at 64 characters, so an owner-entered gym name can't inject mail headers or change the sending address (`senderFor`, unit-tested) | ✅ |
 | Password reset / invite: single use, 30 min / 72 h, ends all sessions, kills other outstanding links | ✅ |
 | Change password ends all other sessions | ✅ |
 | Sessions list / revoke limited to the caller's own sessions (IDOR test) | ✅ |

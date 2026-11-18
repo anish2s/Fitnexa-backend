@@ -32,7 +32,7 @@ export const SWAGGER_HTML = `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gym SaaS API</title>
+  <title>Fitexaa API</title>
   <link rel="stylesheet" href="/api/docs/swagger-ui.css" />
 </head>
 <body>

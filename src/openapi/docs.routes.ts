@@ -6,7 +6,7 @@ import { SWAGGER_HTML, SWAGGER_INIT_JS, SWAGGER_UI_DIR } from './assets.js';
  * Routes outside the documented API, kept in routers so the route audit can still see them.
  *
  * contract: GET /api/v1/openapi.json, public on purpose: it describes routes, never data, and
- *   gym-saas-web generates its client types from it.
+ *   fitexaa-web generates its client types from it.
  * ui: GET /api/docs (+ its three assets), Swagger UI served from node_modules. Mounted only outside
  *   production, or in production when ENABLE_API_DOCS=true.
  */

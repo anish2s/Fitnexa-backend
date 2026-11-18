@@ -57,7 +57,7 @@ Ship `dist/`, `node_modules/` and `package.json` together. Health check path `/h
 
 The `*:prod` scripts and `node dist/server.js` read configuration from the **process environment**
 (the host's secret store), not from a `.env` file. If you keep an env file for a VM, **quote values
-with spaces or `<>`**, e.g. `MAIL_FROM="Gym App <no-reply@mail.yourapp.in>"`: an unquoted line stops
+with spaces or `<>`**, e.g. `MAIL_FROM="Fitexaa <no-reply@mail.yourapp.in>"`: an unquoted line stops
 `set -a; . file` from loading everything after it.
 
 ## Release steps
@@ -95,7 +95,7 @@ only once `MAIL_TRANSPORT=resend` is configured (project Rule 7: owner approval 
 Optional at boot: without credentials, upload endpoints return `503 UPLOADS_NOT_CONFIGURED`.
 1. Create a Cloudinary account (free plan is enough for the pilot).
 2. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (all three) and
-   `CLOUDINARY_FOLDER=gym-saas-prod` (dev defaults to `gym-saas-dev`, so the two never mix).
+   `CLOUDINARY_FOLDER=fitexaa-prod` (dev defaults to `fitexaa-dev`, so the two never mix).
 No upload preset or CORS setup is needed: uploads are signed per request.
 
 ## Online payments (Razorpay)
@@ -117,12 +117,24 @@ One-time setup (needs the owner, not done yet):
 1. Create a Resend account and add the sending domain (e.g. `mail.yourapp.in`).
 2. Add the DNS records Resend shows (SPF, DKIM, and a DMARC record) in Cloudflare; wait for "Verified".
 3. Create an API key with **sending access only**, scoped to that domain.
-4. Set `MAIL_TRANSPORT=resend`, `RESEND_API_KEY=re_…`, `MAIL_FROM="Gym App <no-reply@mail.yourapp.in>"`.
+4. Set `MAIL_TRANSPORT=resend`, `RESEND_API_KEY=re_…`, `MAIL_FROM="Fitexaa <no-reply@mail.yourapp.in>"`. Gym emails keep this address but show the
+   gym's name as the sender, so members never see "Fitexaa".
 
 Startup refuses `resend` without a key or with a `localhost` sender. A provider outage doesn't break
 sign-in endpoints: magic-link and forgot-password still answer `202` (the failure is logged as
 `Email could not be sent`), and gym creation reports `inviteError: "send_failed"` so the invite can
 be resent. Watch the daily quota: past 100/day Resend refuses mail until the next day.
+
+## Renamed to Fitexaa (2026-11-18): effect on existing setups
+Defaults changed; anything set explicitly in an env file is untouched.
+
+| Identifier | Was | Now | Effect on an existing install |
+|---|---|---|---|
+| JWT issuer (`JWT_ISSUER` default) | `gym-saas-api` | `fitexaa-backend` | Access tokens issued before the deploy are refused (401); clients refresh once and carry on. Refresh tokens are server-side sessions, so nobody is signed out. |
+| JWT audience (in code) | `gym-saas` | `fitexaa` | Same as above, same single refresh. |
+| `CLOUDINARY_FOLDER` default | `gym-saas-dev` | `fitexaa-dev` (prod example `fitexaa-prod`) | Only **new** uploads go to the new folder. Existing photos and logos keep their stored URLs and can still be replaced or deleted. Moving old files is optional (Cloudinary rename); nothing in the app needs it. |
+| Database name in `.env.example` | `gym_saas` | `fitexaa` | Example only. An env file that already names `gym_saas` keeps using it. Switching an existing install to a new name means copying the data first (`mongodump`/`mongorestore` or Atlas), otherwise the app starts on an empty database. |
+| `MAIL_FROM` default name | `Gym App` | `Fitexaa` | Gym emails show the **gym's** name as the sender either way (address from `MAIL_FROM`). |
 
 ## Verification (2026-11-17, local)
 Clean `git clone` → `npm ci` → `npm run build` → `npm prune --omit=dev`, production environment

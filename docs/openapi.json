@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Gym SaaS API",
+    "title": "Fitexaa API",
     "version": "0.1.0",
-    "description": "Multi-tenant gym management API. The gym is chosen by the **host** (`<gym>.yourapp.in`); super admin endpoints live on the platform host. Money is integer paise; dates are `YYYY-MM-DD` in the gym's time zone. Full behaviour per endpoint: docs/API.md."
+    "description": "Fitexaa multi-tenant gym management API. The gym is chosen by the **host** (`<gym>.yourapp.in`); super admin endpoints live on the platform host. Money is integer paise; dates are `YYYY-MM-DD` in the gym's time zone. Full behaviour per endpoint: docs/API.md."
   },
   "servers": [
     {

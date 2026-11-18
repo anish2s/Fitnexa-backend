@@ -22,7 +22,7 @@ export type AccessClaims =
     }
   | { typ: 'platform'; sub: string; sid: string; role: 'super_admin' };
 
-const AUDIENCE = 'gym-saas';
+const AUDIENCE = 'fitexaa';
 const ALG = 'HS256';
 
 export interface JwtConfig {

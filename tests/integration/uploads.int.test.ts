@@ -12,7 +12,7 @@ const images = cloudinaryImageStore({
   cloudName: 'demo-cloud',
   apiKey: '123456789012',
   apiSecret: 'test-secret-value',
-  folder: 'gym-saas-test',
+  folder: 'fitexaa-test',
   logger: createLogger('silent'),
   fetch: cloudinary as unknown as typeof fetch,
 });
@@ -57,7 +57,7 @@ describeWithDb('image uploads (real MongoDB, Cloudinary signing)', () => {
     const s1 = await sign(desk, { purpose: 'member_photo', memberId: priya });
     expect(s1.status).toBe(200);
     const id1 = s1.body.data.publicId as string;
-    expect(id1).toMatch(new RegExp(`^gym-saas-test/gyms/${ph}/members/${priya}/[A-Za-z0-9]{16}$`));
+    expect(id1).toMatch(new RegExp(`^fitexaa-test/gyms/${ph}/members/${priya}/[A-Za-z0-9]{16}$`));
     expect(s1.body.data.fields.signature).toMatch(/^[a-f0-9]{40}$/);
     expect(JSON.stringify(s1.body)).not.toContain('test-secret-value');
 
@@ -84,7 +84,7 @@ describeWithDb('image uploads (real MongoDB, Cloudinary signing)', () => {
   it('owner signs logo and icon uploads; the URL goes into branding', async () => {
     const s = await sign(owner, { purpose: 'gym_logo' });
     expect(s.status).toBe(200);
-    expect(s.body.data.publicId).toMatch(new RegExp(`^gym-saas-test/gyms/${ph}/branding/logo-`));
+    expect(s.body.data.publicId).toMatch(new RegExp(`^fitexaa-test/gyms/${ph}/branding/logo-`));
     const b = await call('patch', PH, '/gym/branding', owner).send({
       logoUrl: s.body.data.deliveryUrl,
     });
@@ -96,11 +96,11 @@ describeWithDb('image uploads (real MongoDB, Cloudinary signing)', () => {
     const arjun = await memberIdOf('powerhouse', '+919811111111');
     const fz = await gymId('fitzone');
     for (const publicId of [
-      `gym-saas-test/gyms/${ph}/members/${arjun}/abcdefgh12345678`,
-      `gym-saas-test/gyms/${fz}/members/${priya}/abcdefgh12345678`,
-      `gym-saas-test/gyms/${ph}/members/${priya}/../${arjun}/abcdefgh1234`,
-      `gym-saas-test/gyms/${ph}/members/${priya}/short`,
-      `gym-saas-test/gyms/${ph}/branding/logo-abcdefgh12345678`,
+      `fitexaa-test/gyms/${ph}/members/${arjun}/abcdefgh12345678`,
+      `fitexaa-test/gyms/${fz}/members/${priya}/abcdefgh12345678`,
+      `fitexaa-test/gyms/${ph}/members/${priya}/../${arjun}/abcdefgh1234`,
+      `fitexaa-test/gyms/${ph}/members/${priya}/short`,
+      `fitexaa-test/gyms/${ph}/branding/logo-abcdefgh12345678`,
       'https://evil.example/x.png',
     ]) {
       const res = await call('put', PH, `/members/${priya}/photo`, desk).send({ publicId });

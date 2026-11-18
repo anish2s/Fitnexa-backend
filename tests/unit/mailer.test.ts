@@ -5,6 +5,7 @@ import {
   MailSendError,
   createMailer,
   resendMailer,
+  senderFor,
   type MailMessage,
 } from '../../src/lib/mailer.js';
 
@@ -85,6 +86,47 @@ describe('resendMailer', () => {
   });
 });
 
+describe('senderFor (gym name as the sender)', () => {
+  const FROM = 'Fitexaa <no-reply@mail.yourapp.in>';
+
+  it("keeps MAIL_FROM's address and shows the gym's name", () => {
+    expect(senderFor(FROM, 'Powerhouse Fitness')).toBe(
+      '"Powerhouse Fitness" <no-reply@mail.yourapp.in>',
+    );
+    expect(senderFor('no-reply@mail.yourapp.in', 'FitZone')).toBe(
+      '"FitZone" <no-reply@mail.yourapp.in>',
+    );
+  });
+
+  it('falls back to MAIL_FROM with no or an empty name', () => {
+    expect(senderFor(FROM)).toBe(FROM);
+    expect(senderFor(FROM, '  \r\n "<>" ')).toBe(FROM);
+  });
+
+  it('cannot inject headers, break the quoting or swap the address', () => {
+    const s = senderFor(FROM, 'Evil Gym\r\nBcc: victim@x.in');
+    expect(s).toBe('"Evil Gym Bcc: victim@x.in" <no-reply@mail.yourapp.in>');
+    expect(s).not.toMatch(/[\r\n]/);
+    expect(senderFor(FROM, 'Gym" <attacker@evil.in>')).toBe(
+      '"Gym attacker@evil.in" <no-reply@mail.yourapp.in>',
+    );
+    expect(senderFor(FROM, 'Back\\slash')).toBe('"Back slash" <no-reply@mail.yourapp.in>');
+    expect(senderFor(FROM, 'x'.repeat(200))).toBe(`"${'x'.repeat(64)}" <no-reply@mail.yourapp.in>`);
+  });
+
+  it('the Resend transport sends gym mail under the gym name', async () => {
+    const f = fakeFetch(200, { id: 'email_1' });
+    await resendMailer({ apiKey: 're_k', from: FROM, logger, fetch: f }).send({
+      ...msg,
+      fromName: 'Powerhouse Fitness',
+    });
+    const [, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string).from).toBe(
+      '"Powerhouse Fitness" <no-reply@mail.yourapp.in>',
+    );
+  });
+});
+
 describe('mail config', () => {
   const base = {
     MONGODB_URI: 'mongodb://x/y',
@@ -110,7 +152,7 @@ describe('mail config', () => {
       ...prod,
       MAIL_TRANSPORT: 'resend',
       RESEND_API_KEY: 're_abcdefgh123',
-      MAIL_FROM: 'Gym App <no-reply@yourapp.in>',
+      MAIL_FROM: 'Fitexaa <no-reply@yourapp.in>',
     });
     expect(env.MAIL_TRANSPORT).toBe('resend');
     expect(() => parseEnv({ ...prod, MAIL_TRANSPORT: 'log' })).toThrow(/MAIL_TRANSPORT/);

@@ -341,6 +341,7 @@ export function createAuthService(deps: {
     const link = appUrl(tenant, `/login/verify?token=${token}`);
     await safeSend({
       kind: 'magic_link',
+      fromName: tenant.name,
       to: user.email!,
       subject: `Your sign-in link for ${tenant.name}`,
       text:
@@ -378,6 +379,7 @@ export function createAuthService(deps: {
     if (!token) return;
     await safeSend({
       kind: 'password_reset',
+      fromName: tenant.name,
       to: user.email!,
       subject: `Reset your ${tenant.name} password`,
       text:
@@ -408,6 +410,7 @@ export function createAuthService(deps: {
     if (!token) return { sent: false, reason: 'throttled' };
     const sent = await safeSend({
       kind: 'invite',
+      fromName: tenant.name,
       to: user.email,
       subject: `You've been invited to ${tenant.name}`,
       text:

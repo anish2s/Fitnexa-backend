@@ -101,7 +101,12 @@ describeWithDb('renewal reminders (real MongoDB)', () => {
 
     expect(await inPH(() => svc.dispatch(at(10)))).toMatchObject({ sent: 1 });
     const mail = outbox.outbox[0]!;
-    expect(mail).toMatchObject({ to: 'arjun@member.demo', kind: 'renewal_reminder' });
+    expect(mail).toMatchObject({
+      to: 'arjun@member.demo',
+      kind: 'renewal_reminder',
+      fromName: 'Powerhouse Fitness',
+    });
+    expect(JSON.stringify(mail)).not.toMatch(/fitexaa/i);
     expect(mail.subject).toMatch(/^Your Powerhouse Fitness membership ends on \d{1,2} \w+ \d{4}$/);
     expect(mail.text).toContain('Hi Arjun Sharma');
     expect(mail.text).toContain('Monthly membership');

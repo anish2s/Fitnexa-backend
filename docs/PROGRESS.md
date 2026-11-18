@@ -8,7 +8,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 **Phase 1 — Backend: approved by the owner on 2026-11-17** ([completion report](PHASE1-REPORT.md)), with live Resend email and the live Razorpay test payment deferred (see Decisions). Phase 2 (dashboard) may start.
 
 ## Decisions
-- [x] **Repositories** (2026-11-13): two repos. `gym-saas-api` (this) and `gym-saas-web` (dashboard + member PWA). Contract = OpenAPI spec.
+- [x] **Repositories** (2026-11-13): two repos. `fitexaa-backend` (this) and `fitexaa-web` (dashboard + member PWA). Contract = OpenAPI spec.
 - [x] **Member login** (2026-11-13): **email sign-in link** (owner's choice). Consequences:
   - Members without an email can't use the member app; front desk must capture emails (M4 form will flag it).
   - A real email provider is needed **before the pilot**, not at M9: pulled forward into M4.
@@ -18,6 +18,7 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [ ] **Open (owner to decide later)**: should front-desk staff see revenue on the dashboard? Built: no (owner and `reports:read` only; one-line change).
 - [ ] **Open (owner to decide later)**: renewal rate counts late renewals as renewed and ignores memberships not yet ended (late renewals also shown separately). Built that way.
 - [x] **Phase 1 approval** (2026-11-17): owner approved Phase 1. **Deferred**, not done: live Resend delivery (needs API key + verified domain) and a live Razorpay test-mode round trip (needs a test account). Both are built and tested against fakes; they stay `[~]` until verified live, and must be done before the pilot charges or emails real members.
+- [x] **Product name** (2026-11-18): **Fitexaa** (was "Fitnexa" in the GitHub/folder names; the code used placeholders). Repos: `fitexaa-backend` and `fitexaa-web`. Owner chose to rename the internal identifiers too (JWT issuer/audience, Cloudinary folder default, example DB name); effects in DEPLOYMENT.md. White-label rule: gym emails go out under the gym's name; "Fitexaa" appears only on the platform side, docs and tooling. `yourapp.in` stays as the placeholder domain until a real one is bought.
 - [x] **Plan lengths** (2026-11-17): calendar months only: monthly, quarterly, half-yearly, yearly. Ends the day before the same date N months later; short months run to month end.
 
 ## Phase 1 milestones
@@ -113,6 +114,8 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] Member list shows and filters by membership (2026-11-18): each `GET /members` row has the current membership (status, expiring-soon, plan, dates, days left, queued renewal) and `balanceDuePaise`, using the same rules as the profile and `/memberships/expiring`; new `status` and `due` filters. One tenant-scoped aggregation; a plain list joins only the page. 6 integration tests incl. agreement with the profile for every row, paging totals, 403/401, FitZone isolation and a forged cross-gym membership that must not join
 - [x] Rate limits per visitor behind the dashboard (2026-11-18, Phase 2 review): `TRUST_PROXY` accepts the Next.js server's address(es) (`loopback`, IPs, CIDRs, `uniquelocal`…) and production refuses a hop count, so `X-Forwarded-For`/`-Host` count only when they come from our own proxy. The dashboard overwrites `X-Forwarded-For` with the visitor's IP. Tests: two visitors behind the proxy get separate limits; forged headers from any other caller are ignored (`tests/http/app.test.ts`); env parsing (`tests/unit/env.test.ts`). Requirement documented in DEPLOYMENT.md: the API is reachable only through the Next.js server
 - [x] `GET /auth/session` (2026-11-18): role behind the refresh cookie, read-only (no rotation; a token rotated within the race grace still counts), for the dashboard's server-side page guards. Public by design (proves itself with the cookie); 2 integration tests incl. another gym's host and logged-out cookies
+
+- [x] Rename to Fitexaa (2026-11-18): package, README, CLAUDE.md, docs, OpenAPI/Swagger title, seed output, defaults (JWT issuer/audience, `MAIL_FROM`, Cloudinary folder, example DB name). Gym emails (sign-in link, password reset, invite, renewal reminder) now go out under the gym's own name with the address from `MAIL_FROM`; the name is cleaned so it can't inject mail headers. 11 new or extended tests: sender unit tests (injection, quoting, length, fallback) and integration checks that the four gym emails carry the gym's name and never "Fitexaa"
 
 ## Schedule reassessment
 No existing code, so the plan stands. At 2–3 h/day, M2–M10 is roughly 4–5 weeks, which fits the

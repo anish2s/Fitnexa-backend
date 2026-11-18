@@ -25,7 +25,7 @@ export interface ImageStore {
   deliveryUrl(publicId: string, kind: ImageKind): string;
   /** Best effort: never throws (a leftover image must not fail the user's action). */
   destroy(publicId: string): Promise<void>;
-  /** e.g. `gym-saas/gyms/<tenantId>` — every id this gym may use starts with it. */
+  /** e.g. `fitexaa-dev/gyms/<tenantId>` — every id this gym may use starts with it. */
   gymPrefix(tenantId: string): string;
 }
 

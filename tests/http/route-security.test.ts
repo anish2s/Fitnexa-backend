@@ -31,7 +31,7 @@ const PUBLIC = new Set([
   'POST /api/v1/auth/password/forgot',
   'POST /api/v1/auth/password/reset',
   'POST /api/v1/webhooks/razorpay', // proves itself with the gym's webhook signature
-  // The API contract: describes routes, never data; gym-saas-web generates its client from it.
+  // The API contract: describes routes, never data; fitexaa-web generates its client from it.
   'GET /api/v1/openapi.json',
   // Swagger UI (off in production unless ENABLE_API_DOCS=true) and its locally served assets.
   'GET /api/docs',

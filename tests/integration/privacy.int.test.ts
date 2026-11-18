@@ -21,7 +21,7 @@ const images = cloudinaryImageStore({
   cloudName: 'demo-cloud',
   apiKey: '123456789012',
   apiSecret: 'test-secret-value',
-  folder: 'gym-saas-test',
+  folder: 'fitexaa-test',
   logger: createLogger('silent'),
   fetch: cloudinary as unknown as typeof fetch,
 });
@@ -99,7 +99,7 @@ describeWithDb('DPDP export and erasure (real MongoDB)', () => {
       Member.updateOne(
         { _id: a._id },
         {
-          photoPublicId: `gym-saas-test/gyms/x/members/${a._id}/abc`,
+          photoPublicId: `fitexaa-test/gyms/x/members/${a._id}/abc`,
           photoUrl: 'https://res.cloudinary.com/x.jpg',
           notes: 'Knee injury',
           dateOfBirth: new Date('1990-01-01'),

@@ -4,7 +4,7 @@ _Prepared 2026-11-17 for the owner's approval. Phase 2 (dashboard) starts only a
 
 ## Summary
 
-The backend for the multi-gym SaaS is built: one API, one MongoDB, every gym isolated on its own
+The backend for Fitexaa, the multi-gym SaaS, is built: one API, one MongoDB, every gym isolated on its own
 subdomain. Milestones 1–10 are complete. **398 automated tests pass against a real MongoDB**, the
 built server has been smoke-tested after every milestone, Cloudinary has been verified live, and the
 deployment steps were rehearsed end to end in production mode.
@@ -86,7 +86,7 @@ dependencies.
 
 ## Phase 2 readiness
 
-- The dashboard (`gym-saas-web`) can generate its API client from `docs/openapi.json`; behaviour per
+- The dashboard (`fitexaa-web`) can generate its API client from `docs/openapi.json`; behaviour per
   endpoint is in `docs/API.md`.
 - Demo data (`npm run seed`): two gyms, owners, staff, members with memberships, payments and visits.
 - Frontend notes already recorded: access token in memory only, refresh via HttpOnly cookie, email

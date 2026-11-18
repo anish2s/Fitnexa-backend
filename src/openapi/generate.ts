@@ -201,10 +201,10 @@ export function buildOpenApi(mounts: MountedRouter[], info: { version: string })
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Gym SaaS API',
+      title: 'Fitexaa API',
       version: info.version,
       description:
-        'Multi-tenant gym management API. The gym is chosen by the **host** (`<gym>.yourapp.in`); ' +
+        'Fitexaa multi-tenant gym management API. The gym is chosen by the **host** (`<gym>.yourapp.in`); ' +
         'super admin endpoints live on the platform host. Money is integer paise; dates are `YYYY-MM-DD` ' +
         "in the gym's time zone. Full behaviour per endpoint: docs/API.md.",
     },

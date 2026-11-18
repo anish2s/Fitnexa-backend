@@ -201,7 +201,13 @@ export function createNotificationService(deps: {
         today,
       );
       try {
-        await mailer.send({ to: member.email, subject, text, kind: 'renewal_reminder' });
+        await mailer.send({
+          to: member.email,
+          subject,
+          text,
+          kind: 'renewal_reminder',
+          fromName: g.name,
+        });
         await Notification.updateOne(
           { _id: n._id },
           { $set: { status: 'sent', sentAt: now }, $inc: { attempts: 1 }, $unset: { reason: 1 } },

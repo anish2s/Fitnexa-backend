@@ -454,8 +454,14 @@ describeWithDb('authentication (real MongoDB)', () => {
       expect(res.status).toBe(202);
       expect(mailer.outbox).toHaveLength(1);
       const mail = mailer.outbox[0]!;
-      expect(mail).toMatchObject({ to: 'arjun@member.demo', kind: 'magic_link' });
+      // White-label: the member sees their gym as the sender, never the platform.
+      expect(mail).toMatchObject({
+        to: 'arjun@member.demo',
+        kind: 'magic_link',
+        fromName: 'Powerhouse Fitness',
+      });
       expect(mail.subject).toContain('Powerhouse Fitness');
+      expect(JSON.stringify(mail)).not.toMatch(/fitexaa/i);
       expect(mail.text).toContain('http://powerhouse.localhost:3000/login/verify?token=');
 
       const signedIn = await verify(PH, lastLinkToken());
@@ -568,6 +574,7 @@ describeWithDb('authentication (real MongoDB)', () => {
       expect(mailer.outbox.at(-1)).toMatchObject({
         kind: 'password_reset',
         to: 'owner@powerhouse.demo',
+        fromName: 'Powerhouse Fitness',
       });
       const token = lastLinkToken();
 

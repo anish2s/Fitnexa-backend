@@ -58,7 +58,11 @@ describeWithDb('staff management (real MongoDB)', () => {
       grants: ['payments:refund', 'reports:read'],
     });
     expect(res.body.data.inviteSent).toBe(true);
-    expect(mailer.outbox.at(-1)!.to).toBe('kiran@powerhouse.demo');
+    expect(mailer.outbox.at(-1)).toMatchObject({
+      to: 'kiran@powerhouse.demo',
+      kind: 'invite',
+      fromName: 'Powerhouse Fitness',
+    });
 
     const accept = await call('post', PH, '/auth/password/reset').send({
       token: lastLinkToken(),

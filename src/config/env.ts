@@ -105,7 +105,7 @@ export const envSchema = z
     // --- Authentication ---
     /** HMAC key for access tokens. 32+ random bytes, e.g. `openssl rand -base64 48`. */
     JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
-    JWT_ISSUER: z.string().default('gym-saas-api'),
+    JWT_ISSUER: z.string().default('fitexaa-backend'),
     ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().min(60).max(3600).default(900),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
     MAGIC_LINK_TTL_MIN: z.coerce.number().int().min(5).max(60).default(15),
@@ -129,8 +129,9 @@ export const envSchema = z
     // --- Email ---
     /** log: writes emails to the log (dev only). memory: kept in memory (tests). resend: real. */
     MAIL_TRANSPORT: z.enum(['log', 'memory', 'resend']).default('log'),
-    /** Must be an address on a domain verified in the provider, e.g. `Gym App <no-reply@yourapp.in>`. */
-    MAIL_FROM: z.string().trim().min(3).default('Gym App <no-reply@localhost>'),
+    /** Must be an address on a domain verified in the provider, e.g. `Fitexaa <no-reply@yourapp.in>`.
+     * Gym mail keeps the address but shows the gym's name as the sender (see senderFor). */
+    MAIL_FROM: z.string().trim().min(3).default('Fitexaa <no-reply@localhost>'),
     RESEND_API_KEY: z.string().trim().optional(),
 
     // --- Scheduled jobs (renewal reminders) ---
@@ -192,7 +193,7 @@ export const envSchema = z
       .string()
       .trim()
       .regex(/^[a-z0-9_-]{1,40}$/, 'Lowercase letters, digits, _ and - only')
-      .default('gym-saas-dev'),
+      .default('fitexaa-dev'),
   })
   .transform((env) => ({
     ...env,

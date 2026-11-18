@@ -17,7 +17,7 @@ export type RouteMeta =
   | { kind: 'rawBody'; contentType: string }
   | { kind: 'produces'; contentType: string };
 
-const META = Symbol.for('gym-saas.route-meta');
+const META = Symbol.for('fitexaa.route-meta');
 
 export function tag<T extends RequestHandler>(fn: T, meta: RouteMeta): T {
   (fn as unknown as Record<symbol, RouteMeta[]>)[META] = [

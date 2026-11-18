@@ -1,5 +1,5 @@
 {
-  "name": "gym-saas-api",
+  "name": "fitexaa-backend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -51,7 +51,7 @@
     "typescript-eslint": "^8.72.2",
     "vitest": "^5.1.0"
   },
-  "description": "Multi-tenant Gym SaaS — backend API (Express + MongoDB)",
+  "description": "Fitexaa — multi-tenant gym management platform, backend API (Express + MongoDB)",
   "engines": {
     "node": ">=22"
   }

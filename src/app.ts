@@ -236,7 +236,7 @@ export function createApp(deps: AppDeps) {
   mounts.unshift({ base: '', path: '', router: health });
   app.locals.mounts = mounts;
 
-  // The API contract for gym-saas-web (it generates its client types from this). Built once, lazily.
+  // The API contract for fitexaa-web (it generates its client types from this). Built once, lazily.
   let spec: ReturnType<typeof buildOpenApi> | undefined;
   const contract = openApiRouter(
     () => (spec ??= buildOpenApi(mounts, { version: PACKAGE_VERSION })),

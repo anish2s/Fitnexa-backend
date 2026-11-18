@@ -1,9 +1,9 @@
-# gym-saas-api
+# fitexaa-backend
 
-Backend API for a multi-tenant, white-label gym management platform. One API, one database,
+Backend API for **Fitexaa**, a multi-tenant, white-label gym management platform. One API, one database,
 many gyms (`powerhouse.yourapp.in`, `fitzone.yourapp.in`, …) with strict per-gym data isolation.
 
-The admin dashboard and member PWA live in a separate repository, **gym-saas-web**, and talk to
+The admin dashboard and member PWA live in a separate repository, **fitexaa-web**, and talk to
 this API only through its documented REST endpoints.
 
 **Status:** Phase 1 (backend) complete: 398 tests against a real MongoDB; see the
