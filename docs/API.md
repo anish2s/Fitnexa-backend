@@ -202,7 +202,7 @@ same gym with the same email (`409 DUPLICATE`).
 
 | Method & path | Permission | Body / query | Result |
 |---|---|---|---|
-| `GET /members` | `members:read` | `?q&archived=true|false&sort=-joinDate|joinDate|name|memberCode&joinedFrom&joinedTo&page&limit` | `[{ id, memberCode, name, phone, email, photoUrl, joinDate, appAccess, archivedAt }]` + page meta |
+| `GET /members` | `members:read` | `?q&archived=true|false&sort=-joinDate|joinDate|name|memberCode&joinedFrom&joinedTo&status=active|expiring|upcoming|expired|none&due=true|false&page&limit` | `[{ id, memberCode, name, phone, email, photoUrl, joinDate, appAccess, archivedAt, membership, balanceDuePaise }]` + page meta (see below) |
 | `GET /members/:id` | `members:read` | — | member detail |
 | `POST /members` | `members:create` | `{ name, phone, email?, gender?, dateOfBirth?, joinDate?, emergencyContact?{ name, phone, relation? }, notes?, consent: true }` | `201` member detail |
 | `PATCH /members/:id` | `members:update` | any create field except `consent`; `null` clears `email, gender, dateOfBirth, emergencyContact, notes` | member detail. `409` if archived. |
@@ -211,6 +211,22 @@ same gym with the same email (`409 DUPLICATE`).
 | `GET /members/me` | `self:read` (members) | — | own profile (no staff notes) |
 | `PATCH /members/me` | `self:update` (members) | any of `gender, dateOfBirth, emergencyContact` | own profile |
 
+- **Membership column.** Each list row has the member's current membership, picked like the
+  profile (active, else the next upcoming, else the latest; cancelled ones ignored):
+  ```json
+  "membership": {
+    "status": "active",              // active | upcoming | expired | none
+    "expiringSoon": true,            // active, ends within renewalReminderDays, not renewed
+    "plan": { "id": "…", "name": "Monthly" },   // null when status is none
+    "startDate": "2026-10-24", "endDate": "2026-11-23",
+    "daysLeft": 6,                   // incl. today if active; until start if upcoming; else null
+    "nextStartDate": null            // a renewal already queued after the active one
+  },
+  "balanceDuePaise": 100000          // owed across all non-cancelled memberships (never negative)
+  ```
+- `status` filters on that column; `status=expiring` uses the same rule as
+  `GET /memberships/expiring`. `due=true` keeps members with `balanceDuePaise > 0`. Filters combine
+  with `q`, `archived`, join dates, sorting and paging; `meta.total` counts the filtered set.
 - `q` matches name, email, phone digits (3+) or the start of the member code. Typed text is never
   treated as a pattern.
 - Dates are `YYYY-MM-DD`. `joinDate` defaults to today in the gym's time zone; it may be back-dated

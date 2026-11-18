@@ -4,6 +4,8 @@ import { objectId, pageQuery } from '../../lib/pagination.js';
 import { emailField, phoneField } from '../tenants/tenant.schemas.js';
 import { GENDERS } from './member.model.js';
 
+export const MEMBER_LIST_STATUSES = ['active', 'expiring', 'upcoming', 'expired', 'none'] as const;
+
 /** `YYYY-MM-DD` → Date at UTC midnight. */
 const dateOnly = z
   .string()
@@ -49,6 +51,16 @@ export const memberListQuery = pageQuery.extend({
   sort: z.enum(['-joinDate', 'joinDate', 'name', 'memberCode']).default('-joinDate'),
   joinedFrom: dateOnly.optional(),
   joinedTo: dateOnly.optional(),
+  /**
+   * Current membership status, as on the member profile. `expiring` = active, ending within the
+   * gym's renewal reminder window and not yet renewed (same rule as /memberships/expiring).
+   */
+  status: z.enum(MEMBER_LIST_STATUSES).optional(),
+  /** Only members who still owe money on a non-cancelled membership. */
+  due: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 export const createMemberBody = z.object({

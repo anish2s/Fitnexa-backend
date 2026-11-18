@@ -1,7 +1,7 @@
-import mongoose, { Types, type ClientSession } from 'mongoose';
+import mongoose, { Types, type ClientSession, type PipelineStage } from 'mongoose';
 import { Errors } from '../../lib/errors.js';
 import type { ImageStore } from '../../lib/image-store.js';
-import { formatDateOnly, parseDateOnly, todayIn } from '../../lib/dates.js';
+import { addDays, daysBetween, formatDateOnly, parseDateOnly, todayIn } from '../../lib/dates.js';
 import { escapeRegex, pageMeta, skipFor } from '../../lib/pagination.js';
 import { requireTenantId } from '../../tenancy/context.js';
 import { diffChanges, type AuditContext, type AuditService } from '../audit/audit.service.js';
@@ -9,6 +9,7 @@ import { Session } from '../auth/session.model.js';
 import { nextSequence } from '../counters/counter.model.js';
 import { Tenant } from '../tenants/tenant.model.js';
 import { User } from '../users/user.model.js';
+import { Membership } from '../memberships/membership.model.js';
 import { gymCalendar, membershipSummary } from '../memberships/membership.service.js';
 import { MEMBER_CONSENT_VERSION, Member } from './member.model.js';
 import type {
@@ -66,6 +67,145 @@ function toListItem(m: LeanMember) {
     joinDate: formatDateOnly(m.joinDate),
     appAccess: hasApp(m),
     archivedAt: m.archivedAt ?? null,
+  };
+}
+
+const LIST_FIELDS = {
+  memberCode: 1,
+  name: 1,
+  phone: 1,
+  email: 1,
+  photoUrl: 1,
+  joinDate: 1,
+  userId: 1,
+  archivedAt: 1,
+} as const;
+
+type ListStatus = 'active' | 'upcoming' | 'expired' | 'none';
+type PickedMembership = {
+  startDate: Date;
+  endDate: Date;
+  plan: { planId: Types.ObjectId; name: string };
+};
+type ListRow = LeanMember & {
+  _status: ListStatus;
+  _expiring: boolean;
+  _pick?: PickedMembership | null;
+  _next?: Date | null;
+  balanceDuePaise: number;
+};
+
+/**
+ * Aggregation stages that add each member's current membership, with the same rules as the
+ * profile (`membershipSummary`): active, else the next upcoming, else the latest; cancelled ones
+ * ignored. Also `_expiring` (active, ends by `until`, nothing queued after it: the
+ * /memberships/expiring rule) and the money still owed. The tenant plugin scopes the $lookup.
+ */
+function membershipStages(today: Date, until: Date): PipelineStage.FacetPipelineStage[] {
+  const where = (cond: unknown) => ({ $filter: { input: '$_ms', cond } });
+  return [
+    {
+      $lookup: {
+        from: Membership.collection.collectionName,
+        let: { mid: '$_id' },
+        pipeline: [
+          { $match: { $expr: { $eq: ['$memberId', '$$mid'] }, cancelledAt: null } },
+          { $sort: { startDate: -1 as const } },
+          {
+            $project: {
+              startDate: 1,
+              endDate: 1,
+              'plan.planId': 1,
+              'plan.name': 1,
+              totalPaise: 1,
+              paidPaise: 1,
+            },
+          },
+        ],
+        as: '_ms',
+      },
+    },
+    {
+      $addFields: {
+        _active: where({
+          $and: [{ $lte: ['$$this.startDate', today] }, { $gte: ['$$this.endDate', today] }],
+        }),
+        // Sorted newest first, so the last one is the next to start.
+        _upcoming: where({ $gt: ['$$this.startDate', today] }),
+        balanceDuePaise: {
+          $sum: {
+            $map: {
+              input: '$_ms',
+              in: {
+                $max: [
+                  0,
+                  { $subtract: ['$$this.totalPaise', { $ifNull: ['$$this.paidPaise', 0] }] },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+    {
+      $addFields: {
+        _status: {
+          $switch: {
+            branches: [
+              { case: { $gt: [{ $size: '$_active' }, 0] }, then: 'active' },
+              { case: { $gt: [{ $size: '$_upcoming' }, 0] }, then: 'upcoming' },
+              { case: { $gt: [{ $size: '$_ms' }, 0] }, then: 'expired' },
+            ],
+            default: 'none',
+          },
+        },
+        _pick: {
+          $ifNull: [
+            { $arrayElemAt: ['$_active', 0] },
+            { $arrayElemAt: ['$_upcoming', -1] },
+            { $arrayElemAt: ['$_ms', 0] },
+          ],
+        },
+        _next: {
+          $cond: [
+            { $gt: [{ $size: '$_active' }, 0] },
+            { $arrayElemAt: ['$_upcoming.startDate', -1] },
+            null,
+          ],
+        },
+        _expiring: {
+          $and: [
+            { $gt: [{ $size: '$_active' }, 0] },
+            { $eq: [{ $size: '$_upcoming' }, 0] },
+            { $lte: [{ $arrayElemAt: ['$_active.endDate', 0] }, until] },
+          ],
+        },
+      },
+    },
+    { $project: { _ms: 0, _active: 0, _upcoming: 0 } },
+  ];
+}
+
+/** The member list's membership column: enough to show and sort out renewals at a glance. */
+function listMembership(r: ListRow, today: Date) {
+  const m = r._pick;
+  return {
+    /** active | upcoming | expired | none, as on the member profile. */
+    status: r._status,
+    /** Active, ending within the gym's reminder window, and not renewed yet. */
+    expiringSoon: r._expiring,
+    plan: m ? { id: String(m.plan.planId), name: m.plan.name } : null,
+    startDate: m ? formatDateOnly(m.startDate) : null,
+    endDate: m ? formatDateOnly(m.endDate) : null,
+    /** Same meaning as on a membership: days left incl. today (active), or until it starts. */
+    daysLeft:
+      m && r._status === 'active'
+        ? daysBetween(today, m.endDate) + 1
+        : m && r._status === 'upcoming'
+          ? daysBetween(today, m.startDate)
+          : null,
+    /** A renewal already queued after the active one. */
+    nextStartDate: r._next ? formatDateOnly(r._next) : null,
   };
 }
 
@@ -206,16 +346,52 @@ export function createMemberService(deps: { audit: AuditService; images: ImageSt
       name: { name: 1 as const, _id: 1 as const },
       memberCode: { memberCode: 1 as const },
     }[q.sort];
-    const [rows, total] = await Promise.all([
-      Member.find(filter)
-        .select('memberCode name phone email photoUrl joinDate userId archivedAt')
-        .sort(sort)
-        .skip(skipFor(q))
-        .limit(q.limit)
-        .lean<LeanMember[]>(),
-      Member.countDocuments(filter),
+
+    const { today, reminderDays } = await gymCalendar();
+    const derive = membershipStages(today, addDays(today, reminderDays));
+    const byMembership: Record<string, unknown> = {};
+    if (q.status === 'expiring') byMembership._expiring = true;
+    else if (q.status) byMembership._status = q.status;
+    if (q.due) byMembership.balanceDuePaise = { $gt: 0 };
+    // Filtering on membership needs it for every member before paging; otherwise only the page
+    // is joined, so a plain list stays as cheap as before.
+    const filterFirst = Object.keys(byMembership).length > 0;
+
+    const [out] = await Member.aggregate<{ rows: ListRow[]; total: { n: number }[] }>([
+      { $match: filter },
+      ...(filterFirst ? [...derive, { $match: byMembership }] : []),
+      { $sort: sort },
+      {
+        $facet: {
+          rows: [
+            { $skip: skipFor(q) },
+            { $limit: q.limit },
+            ...(filterFirst ? [] : derive),
+            {
+              $project: {
+                ...LIST_FIELDS,
+                _status: 1,
+                _expiring: 1,
+                _pick: 1,
+                _next: 1,
+                balanceDuePaise: 1,
+              },
+            },
+          ],
+          total: [{ $count: 'n' }],
+        },
+      },
     ]);
-    return { items: rows.map(toListItem), meta: pageMeta(q, total) };
+    const total = out?.total[0]?.n ?? 0;
+    return {
+      items: (out?.rows ?? []).map((r) => ({
+        ...toListItem(r),
+        membership: listMembership(r, today),
+        /** Owed across all non-cancelled memberships; overpayments don't offset other dues. */
+        balanceDuePaise: r.balanceDuePaise,
+      })),
+      meta: pageMeta(q, total),
+    };
   }
 
   async function get(id: string) {

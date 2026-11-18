@@ -1981,6 +1981,33 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "expiring",
+                "upcoming",
+                "expired",
+                "none"
+              ]
+            }
+          },
+          {
+            "name": "due",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
           }
         ],
         "responses": {

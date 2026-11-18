@@ -1,6 +1,6 @@
 # Progress
 
-_Last updated: 2026-11-17_
+_Last updated: 2026-11-18_
 
 Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified · `[ ]` pending · `[!]` blocked
 
@@ -108,6 +108,9 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 - [x] PHASE1-REPORT test-file count corrected (38 test files + 5 helpers; it said 42)
 - [x] Swagger UI assets served from `swagger-ui-dist` (pinned 5.17.14) instead of a CDN; strict CSP (`script-src 'self'`, no inline script); `/api/docs` off in production unless `ENABLE_API_DOCS=true`; 3 tests
 - [x] Also fixed: lint error from the `razorpay:connect` commit (`preserve-caught-error`)
+
+### Phase 2 support (API changes requested while building the dashboard)
+- [x] Member list shows and filters by membership (2026-11-18): each `GET /members` row has the current membership (status, expiring-soon, plan, dates, days left, queued renewal) and `balanceDuePaise`, using the same rules as the profile and `/memberships/expiring`; new `status` and `due` filters. One tenant-scoped aggregation; a plain list joins only the page. 6 integration tests incl. agreement with the profile for every row, paging totals, 403/401, FitZone isolation and a forged cross-gym membership that must not join
 
 ## Schedule reassessment
 No existing code, so the plan stands. At 2–3 h/day, M2–M10 is roughly 4–5 weeks, which fits the
