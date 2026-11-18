@@ -122,6 +122,7 @@ platform host.
 | `POST /auth/refresh` | cookie | — | new session + rotated cookie |
 | `POST /auth/logout` | cookie | — | `204`, cookie cleared, session ended |
 | `POST /auth/logout-all` | Bearer | — | `204`, every device signed out |
+| `GET /auth/session` | cookie | — | `{ scope: "tenant"\|"platform", role }` for the refresh cookie, read-only (no rotation). Used by the web server to guard owner/platform pages before rendering; 401 `INVALID_REFRESH` otherwise |
 | `GET /auth/me` | Bearer | — | `{ user, scope: "tenant"|"platform", gym: { name, slug } | null, impersonatedBy: { id, name } | null }` |
 | `GET /auth/sessions` | Bearer | — | my active devices `[{ id, current, impersonated, createdAt, lastUsedAt, userAgent, ip }]` |
 | `POST /auth/impersonation/end` | Bearer (impersonation) | — | `204`, ends the "log in as owner" session. `400` on a normal session. |

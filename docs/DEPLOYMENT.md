@@ -13,10 +13,29 @@ need the owner's explicit approval (project Rule 7)._
 | Images | Cloudinary (signed uploads, per-gym folders) |
 
 ## Routing
-All gym traffic is `https://<gym>.yourapp.in`. The Next.js apps (Phase 2/3) rewrite `/api/*` to the
-API service and forward the original host as `X-Forwarded-Host`. Set `TRUST_PROXY` to the number of
-proxies in front of the API (e.g. Cloudflare → Next.js → API = `2`) so `req.hostname` and client IPs
-are taken from the right hop and can't be spoofed from outside.
+All gym traffic is `https://<gym>.yourapp.in`:
+
+```
+visitor ──► Cloudflare ──► Next.js server (dashboard) ──► API (private)
+```
+
+The Next.js server proxies `/api/*` to the API and calls it while rendering pages. On every call it
+**overwrites** `X-Forwarded-Host` (the gym's host) and `X-Forwarded-For` (the visitor's IP, worked
+out from its own trusted hops; see the web repo's `docs/DEPLOYMENT.md`). The API uses them for the gym,
+for rate limits per visitor and for audit IPs.
+
+**Requirement: the API must be reachable only through the Next.js server.** Run it on a private
+network / internal service address with no public route, and set `TRUST_PROXY` to the Next.js
+server's address(es) only, e.g. `TRUST_PROXY=uniquelocal` (any private address) or the exact
+subnet/IP your host gives the web service. Then:
+- a request that really comes from the Next.js server is attributed to the visitor it names;
+- anything else that reaches the API is identified by its own address; its `X-Forwarded-*` headers are
+  ignored, so it can neither pick a gym by header nor dodge rate limits by inventing IPs
+  (`tests/http/app.test.ts`, "client IP behind the Next.js server").
+
+Production refuses a hop count (`TRUST_PROXY=1`/`2`): a count trusts whoever connects.
+Without a forwarded IP every visitor would share the Next.js server's single rate-limit allowance
+(300 requests/min), so a busy gym would lock everyone out: don't "fix" that by raising the limit.
 
 ## Environment
 See `.env.example`. Production requirements enforced at startup:
@@ -107,7 +126,7 @@ be resent. Watch the daily quota: past 100/day Resend refuses mail until the nex
 
 ## Verification (2026-11-17, local)
 Clean `git clone` → `npm ci` → `npm run build` → `npm prune --omit=dev`, production environment
-(`NODE_ENV=production`, Resend transport with a placeholder key, https links, `TRUST_PROXY=1`), a fresh
+(`NODE_ENV=production`, Resend transport with a placeholder key, https links, `TRUST_PROXY=1`; production now requires proxy addresses, see Routing), a fresh
 MongoDB replica set, requests sent the way a proxy forwards them (internal `Host`, real host in
 `X-Forwarded-Host`, `X-Forwarded-Proto: https`):
 
@@ -127,5 +146,5 @@ MongoDB replica set, requests sent the way a proxy forwards them (internal `Host
 | Scheduler started; no secrets/passwords/tokens in logs; member search terms redacted | ✅ |
 | SIGTERM → "Shutting down" → exit code 0 | ✅ |
 
-Still to do on the real host (needs the owner): DNS/TLS (Cloudflare), `TRUST_PROXY` matched to the
-real proxy chain, Atlas backups, error tracking, Resend domain, then one smoke test there.
+Still to do on the real host (needs the owner): DNS/TLS (Cloudflare), `TRUST_PROXY` set to the web
+service's private address and the API kept off the public internet, Atlas backups, error tracking, Resend domain, then one smoke test there.

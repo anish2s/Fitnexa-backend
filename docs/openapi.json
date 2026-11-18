@@ -1108,6 +1108,41 @@
         }
       }
     },
+    "/api/v1/auth/session": {
+      "get": {
+        "operationId": "getAuthSession",
+        "tags": [
+          "auth"
+        ],
+        "summary": "GET /api/v1/auth/session",
+        "description": "No sign-in required.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success envelope (see API.md for the `data` of each endpoint)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          }
+        }
+      }
+    },
     "/api/v1/auth/sessions": {
       "get": {
         "operationId": "getAuthSessions",

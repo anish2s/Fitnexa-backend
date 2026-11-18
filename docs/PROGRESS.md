@@ -111,6 +111,8 @@ Legend: `[x]` done & verified · `[~]` in progress / implemented-not-verified ·
 
 ### Phase 2 support (API changes requested while building the dashboard)
 - [x] Member list shows and filters by membership (2026-11-18): each `GET /members` row has the current membership (status, expiring-soon, plan, dates, days left, queued renewal) and `balanceDuePaise`, using the same rules as the profile and `/memberships/expiring`; new `status` and `due` filters. One tenant-scoped aggregation; a plain list joins only the page. 6 integration tests incl. agreement with the profile for every row, paging totals, 403/401, FitZone isolation and a forged cross-gym membership that must not join
+- [x] Rate limits per visitor behind the dashboard (2026-11-18, Phase 2 review): `TRUST_PROXY` accepts the Next.js server's address(es) (`loopback`, IPs, CIDRs, `uniquelocal`…) and production refuses a hop count, so `X-Forwarded-For`/`-Host` count only when they come from our own proxy. The dashboard overwrites `X-Forwarded-For` with the visitor's IP. Tests: two visitors behind the proxy get separate limits; forged headers from any other caller are ignored (`tests/http/app.test.ts`); env parsing (`tests/unit/env.test.ts`). Requirement documented in DEPLOYMENT.md: the API is reachable only through the Next.js server
+- [x] `GET /auth/session` (2026-11-18): role behind the refresh cookie, read-only (no rotation; a token rotated within the race grace still counts), for the dashboard's server-side page guards. Public by design (proves itself with the cookie); 2 integration tests incl. another gym's host and logged-out cookies
 
 ## Schedule reassessment
 No existing code, so the plan stands. At 2–3 h/day, M2–M10 is roughly 4–5 weeks, which fits the

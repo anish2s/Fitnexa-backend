@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { z } from 'zod';
 
 /**
@@ -11,6 +12,49 @@ const splitCsv = (s: string) =>
     .filter(Boolean);
 
 const csv = z.string().default('').transform(splitCsv);
+
+/** Named ranges Express ("proxy-addr") understands. */
+const TRUST_NAMES = new Set(['loopback', 'linklocal', 'uniquelocal']);
+
+/** "10.0.0.5", "10.0.0.0/8", "fd00::/8", or a named range. */
+function isTrustEntry(v: string): boolean {
+  if (TRUST_NAMES.has(v)) return true;
+  const [addr = '', bits, extra] = v.split('/');
+  const family = isIP(addr);
+  if (!family || extra !== undefined) return false;
+  if (bits === undefined) return true;
+  if (!/^\d{1,3}$/.test(bits)) return false;
+  return Number(bits) <= (family === 4 ? 32 : 128);
+}
+
+/**
+ * TRUST_PROXY: either a hop count ("0" = trust nobody, "1" = the first hop) or, preferably, the
+ * addresses of our own proxy (the Next.js server): "loopback", "10.0.0.0/8", "loopback,fd00::/8"…
+ * With addresses, X-Forwarded-For / X-Forwarded-Host are honoured only on connections that really
+ * come from that proxy; anyone else reaching the API directly is identified by their own address.
+ */
+const trustProxy = z
+  .string()
+  .trim()
+  .default('0')
+  .transform((v, ctx): number | string[] => {
+    if (/^\d+$/.test(v)) {
+      const n = Number(v);
+      if (n <= 5) return n;
+      ctx.addIssue({ code: 'custom', message: 'A TRUST_PROXY hop count must be 0–5' });
+      return z.NEVER;
+    }
+    const list = splitCsv(v);
+    const bad = list.filter((e) => !isTrustEntry(e));
+    if (list.length === 0 || bad.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `TRUST_PROXY must be a hop count or proxy addresses (IP, CIDR, loopback, linklocal, uniquelocal); invalid: ${bad.join(', ') || '(empty)'}`,
+      });
+      return z.NEVER;
+    }
+    return list;
+  });
 
 const bool = z
   .enum(['true', 'false', '1', '0'])
@@ -39,10 +83,11 @@ export const envSchema = z
     CORS_ORIGINS: csv,
 
     /**
-     * Express "trust proxy" setting. Only set when the API really sits behind a proxy
-     * (Cloudflare, a load balancer, the Next.js server), otherwise X-Forwarded-* headers can be spoofed.
+     * Express "trust proxy" setting: who may set X-Forwarded-For/-Host. The API sits behind the
+     * Next.js server, which overwrites both; list that server's address(es) here. A hop count trusts
+     * whoever connects, so production refuses it (see the check below and docs/DEPLOYMENT.md).
      */
-    TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+    TRUST_PROXY: trustProxy,
 
     /** Dev-only escape hatch: resolve tenant from the X-Tenant-Slug header. Forbidden in production. */
     ALLOW_TENANT_HEADER: bool,
@@ -209,6 +254,18 @@ export const envSchema = z
         code: 'custom',
         path: ['ALLOW_TENANT_HEADER'],
         message: 'ALLOW_TENANT_HEADER must be false in production',
+      });
+    }
+    if (
+      env.NODE_ENV === 'production' &&
+      typeof env.TRUST_PROXY === 'number' &&
+      env.TRUST_PROXY > 0
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TRUST_PROXY'],
+        message:
+          'In production TRUST_PROXY must list the Next.js server address(es) (e.g. "uniquelocal" or "10.0.0.0/8"), not a hop count',
       });
     }
     if (env.NODE_ENV === 'production' && env.CORS_ORIGINS.length === 0) {

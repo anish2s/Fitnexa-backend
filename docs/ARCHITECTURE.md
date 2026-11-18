@@ -66,7 +66,7 @@ See [SECURITY.md](SECURITY.md) for the full threat list. Headline items:
 Browser on powerhouse.yourapp.in
    │  same-origin /api/v1/...
    ▼
-Cloudflare (*.yourapp.in, TLS) ──► Next.js app ──rewrite /api──► Express API (TRUST_PROXY=1)
+Cloudflare (*.yourapp.in, TLS) ──► Next.js app ──proxy /api──► Express API (private; TRUST_PROXY=<Next.js address>)
                                                                   │
  helmet → request id + log → CORS → rate limit → JSON body        │
  → resolveTenant(host)  ── opens AsyncLocalStorage tenant scope ──┤
@@ -80,8 +80,8 @@ Cloudflare (*.yourapp.in, TLS) ──► Next.js app ──rewrite /api──►
 
 Key properties:
 
-- **Tenant source:** host only (`req.hostname`, which honours `X-Forwarded-Host` only when
-  `TRUST_PROXY` is set). In development `X-Tenant-Slug` can be enabled; config validation forbids it in
+- **Tenant source:** host only (`req.hostname`, which honours `X-Forwarded-Host` only on connections
+  from an address `TRUST_PROXY` lists, i.e. the Next.js server). In development `X-Tenant-Slug` can be enabled; config validation forbids it in
   production.
 - **Tenant scope:** `runInTenant()` wraps the rest of the request in AsyncLocalStorage. Services never
   pass `tenantId` around by hand.

@@ -101,6 +101,8 @@ export function authRouter(deps: {
   );
 
   router.post('/refresh', sameOrigin, c.refresh);
+  // Read-only: the Next.js server asks who holds the cookie before rendering guarded pages.
+  router.get('/session', c.session);
   router.post('/logout', sameOrigin, c.logout);
   router.post('/logout-all', requireAuth, notWhileImpersonating, c.logoutAll);
   router.post('/impersonation/end', requireAuth, c.endImpersonation);

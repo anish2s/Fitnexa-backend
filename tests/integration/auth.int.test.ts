@@ -399,6 +399,50 @@ describeWithDb('authentication (real MongoDB)', () => {
   });
 
   // ============================================================ member email link
+  describeWithDb('session role for the web server (GET /auth/session)', () => {
+    const peek = (host: string, cookie?: string) => {
+      const r = request(app).get('/api/v1/auth/session').set('Host', host);
+      return cookie ? r.set('Cookie', `${COOKIE}=${cookie}`) : r;
+    };
+
+    it('reports the role behind the cookie without rotating it', async () => {
+      const owner = refreshCookieOf(await login(PH, 'owner@powerhouse.demo'))!;
+      const staff = refreshCookieOf(await login(PH, '98000 00002'))!;
+      const admin = refreshCookieOf(await login(PLATFORM, 'admin@platform.demo'))!;
+
+      const res = await peek(PH, owner);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ scope: 'tenant', role: 'owner' });
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['set-cookie']).toBeUndefined();
+      expect((await peek(PH, staff)).body.data).toEqual({ scope: 'tenant', role: 'staff' });
+      expect((await peek(PLATFORM, admin)).body.data).toEqual({
+        scope: 'platform',
+        role: 'super_admin',
+      });
+      // Not used up: the same cookie still refreshes.
+      expect((await refresh(PH, owner)).status).toBe(200);
+    });
+
+    it('a cookie rotated a moment ago still counts; a dead or foreign one does not', async () => {
+      const first = refreshCookieOf(await login(PH, 'owner@powerhouse.demo'))!;
+      const second = refreshCookieOf(await refresh(PH, first))!;
+      expect((await peek(PH, first)).body.data).toEqual({ scope: 'tenant', role: 'owner' });
+      expect((await peek(PH, second)).status).toBe(200);
+
+      expect((await peek(PH)).status).toBe(401);
+      expect((await peek(PH, 'not-a-token')).status).toBe(401);
+      expect((await peek(FZ, second)).status).toBe(401); // another gym's host
+      expect((await peek(PLATFORM, second)).status).toBe(401);
+
+      await request(app)
+        .post('/api/v1/auth/logout')
+        .set('Host', PH)
+        .set('Cookie', `${COOKIE}=${second}`);
+      expect((await peek(PH, second)).status).toBe(401);
+    });
+  });
+
   describeWithDb('member sign-in by email link', () => {
     const requestLink = (host: string, email: string) =>
       request(app).post('/api/v1/auth/magic-link').set('Host', host).send({ email });

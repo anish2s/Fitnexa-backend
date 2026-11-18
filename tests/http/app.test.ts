@@ -138,6 +138,47 @@ describe('tenant resolution + public branding', () => {
   });
 });
 
+describe('client IP behind the Next.js server (rate limits per visitor)', () => {
+  // supertest connects from 127.0.0.1, i.e. it plays the Next.js server on the same machine.
+  const branding = (a: ReturnType<typeof buildTestApp>, visitor?: string) => {
+    const r = request(a).get('/api/v1/public/tenant').set('Host', 'powerhouse.localhost');
+    return visitor ? r.set('X-Forwarded-For', visitor) : r;
+  };
+
+  it('two visitors forwarded by our proxy get separate rate limits', async () => {
+    const proxied = buildTestApp({ env: { TRUST_PROXY: 'loopback', RATE_LIMIT_MAX: '3' } });
+    for (let i = 0; i < 3; i++) expect((await branding(proxied, '203.0.113.10')).status).toBe(200);
+    const limited = await branding(proxied, '203.0.113.10');
+    expect(limited.status).toBe(429);
+    expect(limited.body.error.code).toBe('RATE_LIMITED');
+    // A second visitor through the same proxy still has their whole allowance.
+    for (let i = 0; i < 3; i++) expect((await branding(proxied, '198.51.100.20')).status).toBe(200);
+    expect((await branding(proxied, '198.51.100.20')).status).toBe(429);
+  });
+
+  it('ignores X-Forwarded-For/-Host from a caller that is not our proxy (no spoofing)', async () => {
+    // Only 10.9.8.7 is "our proxy"; this connection comes from 127.0.0.1.
+    const direct = buildTestApp({ env: { TRUST_PROXY: '10.9.8.7', RATE_LIMIT_MAX: '3' } });
+    for (let i = 0; i < 3; i++) expect((await branding(direct, `203.0.113.${i}`)).status).toBe(200);
+    // Inventing a new address each time doesn't buy a fresh allowance.
+    expect((await branding(direct, '198.51.100.99')).status).toBe(429);
+
+    const host = await request(buildTestApp({ env: { TRUST_PROXY: '10.9.8.7' } }))
+      .get('/api/v1/public/tenant')
+      .set('Host', 'powerhouse.localhost')
+      .set('X-Forwarded-Host', 'fitzone.localhost');
+    expect(host.body.data.slug).toBe('powerhouse');
+  });
+
+  it('honours X-Forwarded-Host from a trusted proxy address', async () => {
+    const res = await request(buildTestApp({ env: { TRUST_PROXY: 'loopback' } }))
+      .get('/api/v1/public/tenant')
+      .set('Host', 'internal-api:4000')
+      .set('X-Forwarded-Host', 'fitzone.yourapp.in');
+    expect(res.body.data.slug).toBe('fitzone');
+  });
+});
+
 describe('CORS', () => {
   it('allows a configured exact origin', async () => {
     const res = await request(app).get('/health').set('Origin', 'http://localhost:3000');

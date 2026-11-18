@@ -112,6 +112,15 @@ export function createAuthController(env: Env, auth: AuthService, audit: AuditSe
       }
     },
 
+    /** Role behind the refresh cookie, read-only (used by the web server's page guards). */
+    async session(req: Request, res: Response) {
+      const token = readRefreshCookie(req);
+      const found = token ? await auth.sessionRole(scopeOf(req), token) : null;
+      if (!found) throw Errors.invalidRefresh();
+      res.set('Cache-Control', 'no-store');
+      ok(res, found);
+    },
+
     async logout(req: Request, res: Response) {
       const token = readRefreshCookie(req);
       if (token) await auth.logoutByRefreshToken(scopeOf(req), token);

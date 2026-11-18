@@ -12,7 +12,7 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 |---|---|---|
 | Tenant resolved from host only; body/query/params never consulted | ✅ | `tenancy/resolver.middleware.ts` |
 | Nested subdomains, look-alike domains, malformed hosts rejected | ✅ | `tenancy/host.ts`, `tests/unit/host.test.ts` |
-| `X-Forwarded-Host` ignored unless `TRUST_PROXY` set | ✅ | `app.ts`, `tests/http/app.test.ts` |
+| `X-Forwarded-Host` / `X-Forwarded-For` honoured only from the Next.js server's address (`TRUST_PROXY` lists it; hop counts refused in production) | ✅ | `config/env.ts`, `app.ts`, `tests/http/app.test.ts` |
 | Dev header fallback (`X-Tenant-Slug`) impossible in production | ✅ | `config/env.ts` (startup refuses) |
 | Request-scoped tenant context survives async work; concurrent gyms don't mix | ✅ | `tests/http/resolver-context.test.ts` (40 interleaved requests) |
 | `tenantId` forced into every query, aggregate, insert | ✅ | `tenancy/tenant-scope.plugin.ts`, `tests/unit/tenant-scope.plugin.test.ts` |
@@ -37,7 +37,7 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 |---|---|
 | helmet security headers; `x-powered-by` off | ✅ |
 | CORS allow-list; wildcard entries match only the request's own host; look-alikes refused | ✅ |
-| Rate limiting with standard 429 envelope: global per IP, plus per IP+gym and per IP+gym+account on auth endpoints | ✅ |
+| Rate limiting with standard 429 envelope: global per IP, plus per IP+gym and per IP+gym+account on auth endpoints. Behind the Next.js server the IP is the visitor's (forwarded by the server, spoof-proof per above), so visitors get separate allowances | ✅ |
 | JSON body limit 100 kb; malformed JSON → 400 | ✅ |
 | `query parser: simple` (blocks `?a[$ne]=` operator injection), `strictQuery` | ✅ |
 | Zod validation strips unknown keys (incl. any client `tenantId`) | ✅ |

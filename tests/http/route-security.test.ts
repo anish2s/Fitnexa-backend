@@ -24,6 +24,7 @@ const PUBLIC = new Set([
   'GET /api/v1/public/tenant', // branding for the login page
   'POST /api/v1/auth/login',
   'POST /api/v1/auth/refresh', // proves itself with the HttpOnly refresh cookie
+  'GET /api/v1/auth/session', // same cookie, read-only: role for the web server's page guards
   'POST /api/v1/auth/logout',
   'POST /api/v1/auth/magic-link',
   'POST /api/v1/auth/magic-link/verify',

@@ -537,6 +537,35 @@ export function createAuthService(deps: {
     };
   }
 
+  /**
+   * Who holds this refresh cookie, without using it: no rotation, no side effects. Lets the web
+   * server decide whether to render an owner-only or platform page before any data is fetched.
+   * A token rotated moments ago (another tab refreshed while this page loaded) still counts.
+   */
+  async function sessionRole(
+    scope: AuthScope,
+    refreshToken: string,
+  ): Promise<{ scope: AuthScope['kind']; role: TenantRole | 'super_admin' } | null> {
+    if (!isWellFormedToken(refreshToken)) return null;
+    const presented = hashToken(refreshToken);
+    const now = new Date();
+    const live = { revokedAt: null, expiresAt: { $gt: now } };
+    const Model = sessionModel(scope);
+    const session =
+      (await Model.findOne({ ...live, refreshTokenHash: presented }).lean()) ??
+      (await Model.findOne({
+        ...live,
+        previousRefreshHashes: presented,
+        rotatedAt: { $gt: new Date(now.getTime() - REFRESH_RACE_GRACE_MS) },
+      }).lean());
+    if (!session) return null;
+    const principal = await loadActivePrincipal(scope, session.userId);
+    if (!principal) return null;
+    return scope.kind === 'tenant'
+      ? { scope: 'tenant', role: principal.role as TenantRole }
+      : { scope: 'platform', role: 'super_admin' };
+  }
+
   /** Logout by refresh cookie (works even with an expired access token). Idempotent. */
   async function logoutByRefreshToken(scope: AuthScope, refreshToken: string) {
     if (!isWellFormedToken(refreshToken)) return;
@@ -639,6 +668,7 @@ export function createAuthService(deps: {
     sendInvite,
     changePassword,
     refresh,
+    sessionRole,
     logoutByRefreshToken,
     logoutSession,
     logoutAll: (scope: AuthScope, userId: string) =>
