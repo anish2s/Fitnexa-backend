@@ -1,3 +1,5 @@
+import { applyBrandingPatch } from '../tenants/branding.service.js';
+import type { ImageStore } from '../../lib/image-store.js';
 import mongoose, { Types } from 'mongoose';
 import type { Env } from '../../config/env.js';
 import { Errors } from '../../lib/errors.js';
@@ -46,8 +48,10 @@ export function createPlatformService(deps: {
   auth: AuthService;
   audit: AuditService;
   logger: Logger;
+  images?: ImageStore | null;
 }) {
   const { env, auth, audit } = deps;
+  const images = deps.images ?? null;
   const appUrl = (slug: string) => env.GYM_APP_URL_TEMPLATE.replace('{slug}', slug);
 
   async function loadTenant(id: string): Promise<LeanTenant> {
@@ -208,10 +212,10 @@ export function createPlatformService(deps: {
     kind: 'profile' | 'branding',
   ) {
     await loadTenant(id);
-    const { tenant, changes } = await patchTenant(
-      id,
-      kind === 'branding' ? { branding: patch } : patch,
-    );
+    const { tenant, changes } =
+      kind === 'branding'
+        ? await applyBrandingPatch(id, patch, images)
+        : await patchTenant(id, patch);
     if (changes.length) {
       await audit.record(
         ctx,

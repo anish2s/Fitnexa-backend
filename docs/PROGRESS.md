@@ -189,3 +189,9 @@ depend on the backend.
   `npm run db:indexes` on existing databases.
 - **2026-11-17** — **Phase 1 approved by the owner.** Deferred: live Resend email and the live
   Razorpay test payment (credentials/accounts not set up yet; both remain `[~]`). Phase 2 is unblocked.
+- **2026-11-19** — Per-gym app icons (for the dashboard's favicons): `branding.updatedAt` set on
+  every branding change and returned by `GET /public/tenant` (icon URLs are versioned with it);
+  `appIconUrl` only accepts this gym's own `gym_icon` upload and is checked against Cloudinary's record
+  of the stored file (PNG/JPG/WebP, ≤ 2 MB, square; SVG refused); a replaced icon is deleted; super
+  admins sign uploads for a gym with `POST /platform/tenants/:id/uploads/signature`. 6 new tests
+  (`app-icon.int.test.ts`); 441 passing.

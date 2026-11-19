@@ -174,8 +174,8 @@ export function createApp(deps: AppDeps) {
   };
   const audit = createAuditService({ logger });
   const auth = createAuthService({ env, mailer: deps.mailer, logger, audit });
-  const platform = createPlatformService({ env, auth, audit, logger });
   const images = deps.images === undefined ? createImageStore(env, logger) : deps.images;
+  const platform = createPlatformService({ env, auth, audit, logger, images });
 
   const v1 = express.Router();
   /** Every router mounted under /api/v1, recorded for the OpenAPI document and the route audit. */
@@ -192,7 +192,7 @@ export function createApp(deps: AppDeps) {
   };
   mount('/public', publicTenantRouter());
   mount('/auth', authRouter({ env, jwt, auth, audit }));
-  mount('/gym', gymRouter({ jwt, audit }));
+  mount('/gym', gymRouter({ jwt, audit, images }));
   mount('/audit-logs', auditRouter({ jwt, audit }));
   mount('/staff', staffRouter({ jwt, auth, audit }));
   const ms = membershipRouters({ jwt, audit, env });
@@ -232,7 +232,7 @@ export function createApp(deps: AppDeps) {
   );
   mount('/uploads', uploadRouter({ jwt, images }));
   mount('/plans', planRouter({ jwt, audit }));
-  mount('/platform', platformRouter({ jwt, platform, audit }));
+  mount('/platform', platformRouter({ jwt, platform, audit, images }));
   mounts.unshift({ base: '', path: '', router: health });
   app.locals.mounts = mounts;
 

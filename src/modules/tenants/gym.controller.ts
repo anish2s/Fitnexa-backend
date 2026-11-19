@@ -1,20 +1,22 @@
 import type { Request, Response } from 'express';
 import { ok } from '../../lib/response.js';
 import { auditContextFrom, type AuditService } from '../audit/audit.service.js';
+import type { ImageStore } from '../../lib/image-store.js';
+import { applyBrandingPatch } from './branding.service.js';
 import { getTenantView, patchTenant } from './tenant.service.js';
 
 /**
  * The signed-in owner's own gym. The gym is ALWAYS the host's gym (req.tenant), never an id from
  * the request, so there is nothing to tamper with.
  */
-export function createGymController(audit: AuditService) {
+export function createGymController(audit: AuditService, images: ImageStore | null) {
   async function update(req: Request, res: Response, kind: 'profile' | 'branding') {
     const tenantId = req.tenant!.id;
     const patch = req.valid.body as Record<string, unknown>;
-    const { tenant, changes } = await patchTenant(
-      tenantId,
-      kind === 'branding' ? { branding: patch } : patch,
-    );
+    const { tenant, changes } =
+      kind === 'branding'
+        ? await applyBrandingPatch(tenantId, patch, images)
+        : await patchTenant(tenantId, patch);
     if (changes.length) {
       await audit.record(auditContextFrom(req), {
         action: kind === 'branding' ? 'gym.branding_update' : 'gym.update',

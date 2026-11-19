@@ -20,6 +20,8 @@ const brandingSchema = new Schema(
     secondaryColor: { type: String, match: HEX_COLOR, default: '#0F172A' },
     /** Default theme for this gym's users; each user can still override it. */
     defaultTheme: { type: String, enum: ['dark', 'light', 'system'], default: 'dark' },
+    /** Last branding change (set by the service): versions icon/logo URLs so browsers refetch. */
+    updatedAt: { type: Date },
   },
   { _id: false },
 );
@@ -120,6 +122,7 @@ export function toPublicBranding(t: TenantAttrs & { _id?: unknown }) {
     primaryColor: t.branding?.primaryColor ?? '#7C3AED',
     secondaryColor: t.branding?.secondaryColor ?? '#0F172A',
     defaultTheme: t.branding?.defaultTheme ?? 'dark',
+    brandingUpdatedAt: t.branding?.updatedAt ?? null,
     status: t.status,
   };
 }

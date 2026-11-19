@@ -47,6 +47,7 @@ export function toTenantView(t: LeanTenant) {
       primaryColor: b.primaryColor ?? '#7C3AED',
       secondaryColor: b.secondaryColor ?? '#0F172A',
       defaultTheme: b.defaultTheme ?? 'dark',
+      updatedAt: b.updatedAt ?? null,
     },
     subscription: {
       status: sub.status ?? 'trialing',

@@ -6902,6 +6902,87 @@
         }
       }
     },
+    "/api/v1/platform/tenants/{id}/uploads/signature": {
+      "post": {
+        "operationId": "postPlatformTenantsByIdUploadsSignature",
+        "tags": [
+          "platform"
+        ],
+        "summary": "POST /api/v1/platform/tenants/{id}/uploads/signature",
+        "description": "Super admin, platform host only.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "purpose": {
+                    "type": "string",
+                    "enum": [
+                      "gym_logo",
+                      "gym_icon"
+                    ]
+                  }
+                },
+                "required": [
+                  "purpose"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "422": {
+            "$ref": "#/components/responses/E422"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "2XX": {
+            "description": "Success envelope (see API.md for the `data` of each endpoint)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/platform/tenants/slug-availability": {
       "get": {
         "operationId": "getPlatformTenantsSlugAvailability",

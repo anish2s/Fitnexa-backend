@@ -7,6 +7,9 @@ import type { AuditService } from '../audit/audit.service.js';
 import { createPlatformController } from './platform.controller.js';
 import * as s from './platform.schemas.js';
 import type { PlatformService } from './platform.service.js';
+import { randomImageName, type ImageStore } from '../../lib/image-store.js';
+import { Errors } from '../../lib/errors.js';
+import { ok } from '../../lib/response.js';
 
 /**
  * /api/v1/platform — super admin console. Platform host only: platform tokens are refused on gym
@@ -16,6 +19,7 @@ export function platformRouter(deps: {
   jwt: JwtConfig;
   platform: PlatformService;
   audit: AuditService;
+  images?: ImageStore | null;
 }) {
   const c = createPlatformController(deps.platform, deps.audit);
   const router = Router();
@@ -36,6 +40,24 @@ export function platformRouter(deps: {
     '/tenants/:id/branding',
     validate({ params: s.tenantIdParams, body: s.platformBrandingPatch }),
     c.updateBranding,
+  );
+  // Signs a logo/icon upload into THAT gym's branding folder; the URL is then saved with
+  // PATCH /tenants/:id/branding, which verifies the stored file (format, size, square icon).
+  router.post(
+    '/tenants/:id/uploads/signature',
+    validate({ params: s.tenantIdParams, body: s.brandingSignatureBody }),
+    async (req, res) => {
+      const images = deps.images ?? null;
+      if (!images) throw Errors.uploadsNotConfigured();
+      const { id } = req.valid.params as { id: string };
+      await deps.platform.ensureExists(id);
+      const { purpose } = req.valid.body as { purpose: 'gym_logo' | 'gym_icon' };
+      const kind = purpose === 'gym_logo' ? 'logo' : 'icon';
+      ok(
+        res,
+        images.signUpload(`${images.gymPrefix(id)}/branding/${kind}-${randomImageName()}`, kind),
+      );
+    },
   );
   router.post(
     '/tenants/:id/suspend',

@@ -66,13 +66,15 @@ Called by the dashboard and PWA before login. Gym host required.
       "appIconUrl": null,
       "primaryColor": "#E11D48",
       "secondaryColor": "#0F172A",
-      "defaultTheme": "dark"
+      "defaultTheme": "dark",
+      "updatedAt": "2026-11-19T10:00:00.000Z"
     }
   }
 }
 ```
 `status` is `active` or `suspended` (suspended gyms still show branding so the login page can explain).
-Cached for 60 s.
+`branding.updatedAt` is the last branding change (`null` until the first); clients version icon and
+logo URLs with it so a change shows at once. Cached for 60 s.
 
 ## Authentication — `/api/v1/auth`
 
@@ -147,7 +149,7 @@ Always the host's gym; the body can't name another one.
 |---|---|---|---|
 | `GET /gym` | `gym:read` (owner, staff) | — | gym view (below) |
 | `PATCH /gym` | `gym:update` (owner) | any of `name, email, phone, address{…}, settings{timezone, gstin, receiptPrefix, renewalReminderDays, renewalRemindersEnabled}` | gym view |
-| `PATCH /gym/branding` | `branding:update` (owner) | any of `logoUrl, appIconUrl` (https only), `primaryColor, secondaryColor` (`#RRGGBB`), `defaultTheme` (`dark`/`light`/`system`) | gym view |
+| `PATCH /gym/branding` | `branding:update` (owner) | any of `logoUrl` (https), `appIconUrl` (an upload of ours, see below), `primaryColor, secondaryColor` (`#RRGGBB`), `defaultTheme` (`dark`/`light`/`system`) | gym view (`branding.updatedAt` bumped) |
 
 Patches merge: sending `settings.timezone` leaves the other settings alone. `null` clears an optional
 field. An empty body is `422`.
@@ -517,9 +519,17 @@ Images go straight from the browser to Cloudinary; the API only signs the upload
 3. Confirm:
    - member photo: `PUT /members/:id/photo { publicId }` → member detail with `photoUrl`;
      `DELETE /members/:id/photo` removes it. Replacing or removing deletes the old image from Cloudinary.
-   - logo / icon: `PATCH /gym/branding { logoUrl | appIconUrl: deliveryUrl }`.
+   - logo / icon: `PATCH /gym/branding { logoUrl | appIconUrl: deliveryUrl }` (super admin:
+     `PATCH /platform/tenants/:id/branding`).
 
 `publicId` must be one the API could have issued for that member in this gym, otherwise `422`.
+
+**App icon** (`appIconUrl`, the gym's favicon and home-screen icon): only owners (`branding:update`,
+not grantable to staff) and super admins can set it. It must be a `deliveryUrl` from a `gym_icon`
+upload for **this** gym, and the file Cloudinary actually stored (looked up with the Admin API, not
+the browser's word) must be **PNG, JPG or WebP, ≤ 2 MB and square**; otherwise `422` on `appIconUrl`.
+SVG is refused at upload already (`allowed_formats`) and again here. Replacing or clearing the icon
+deletes the old file. Any branding change sets `branding.updatedAt`.
 Without Cloudinary credentials these endpoints answer `503 UPLOADS_NOT_CONFIGURED`.
 
 ## Super admin console — `/api/v1/platform` (platform host, super admin only)
@@ -531,7 +541,8 @@ Without Cloudinary credentials these endpoints answer `503 UPLOADS_NOT_CONFIGURE
 | `POST /platform/tenants` | `{ name, slug, email?, phone?, address?, settings?, branding?, subscription?, owner{ name, email, phone? } }` | `201 { tenant, appUrl, owner{ id, status: "invited" }, inviteSent, inviteError: null|throttled|send_failed|kind_not_enabled|recipient_not_allowed }`. The gym is created even if the email fails; resend it. `409` if the slug isn't available. |
 | `GET /platform/tenants/:id` | — | `{ tenant, appUrl, owners[], userCounts{ owner, staff, member } }` |
 | `PATCH /platform/tenants/:id` | gym profile fields + `subscription{…}` | gym view |
-| `PATCH /platform/tenants/:id/branding` | branding fields | gym view |
+| `PATCH /platform/tenants/:id/branding` | branding fields (same app icon rules as the owner's) | gym view |
+| `POST /platform/tenants/:id/uploads/signature` | `{ purpose: "gym_logo" \| "gym_icon" }` | signed upload into that gym's branding folder (as `/uploads/signature`) |
 | `POST /platform/tenants/:id/suspend` | `{ reason }` (3–500 chars) | gym view. The gym's next request gets `403 TENANT_SUSPENDED`; sessions are kept. |
 | `POST /platform/tenants/:id/activate` | — | gym view. `409` if not suspended. |
 | `POST /platform/tenants/:id/owner-invite` | — | `202 { sent, ownerId, reason: null|throttled|send_failed|kind_not_enabled|recipient_not_allowed }`. `409` if no owner is waiting. |

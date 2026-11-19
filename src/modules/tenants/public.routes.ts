@@ -17,6 +17,7 @@ export function publicTenantRouter() {
       primaryColor?: string;
       secondaryColor?: string;
       defaultTheme?: string;
+      updatedAt?: Date;
     };
     // Cacheable briefly at the edge; branding changes are rare and not sensitive.
     res.set('Cache-Control', 'public, max-age=60');
@@ -30,6 +31,8 @@ export function publicTenantRouter() {
         primaryColor: b.primaryColor ?? '#7C3AED',
         secondaryColor: b.secondaryColor ?? '#0F172A',
         defaultTheme: b.defaultTheme ?? 'dark',
+        /** Changes whenever branding does; clients use it to version icon URLs. */
+        updatedAt: b.updatedAt ?? null,
       },
     });
   });

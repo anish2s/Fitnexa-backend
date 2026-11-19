@@ -27,6 +27,21 @@ export interface ImageStore {
   destroy(publicId: string): Promise<void>;
   /** e.g. `fitexaa-dev/gyms/<tenantId>` — every id this gym may use starts with it. */
   gymPrefix(tenantId: string): string;
+  /** The public_id behind one of OUR delivery URLs of this kind, or null for any other URL. */
+  publicIdFromUrl(url: string, kind: ImageKind): string | null;
+  /**
+   * What was actually stored (Cloudinary Admin API), so uploads can be checked server-side:
+   * the browser's claims about format, size and shape are never trusted. null if not found.
+   */
+  inspect(publicId: string): Promise<StoredImage | null>;
+}
+
+export interface StoredImage {
+  /** Lowercase, as stored: png, jpg, webp, … */
+  format: string;
+  bytes: number;
+  width: number;
+  height: number;
 }
 
 export type ImageKind = 'logo' | 'icon' | 'member_photo';
@@ -71,9 +86,41 @@ export function cloudinaryImageStore(opts: {
   const deliveryUrl = (publicId: string, kind: ImageKind) =>
     `https://res.cloudinary.com/${opts.cloudName}/image/upload/${DELIVERY[kind]}/${publicId}`;
 
+  const deliveryPrefix = (kind: ImageKind) =>
+    `https://res.cloudinary.com/${opts.cloudName}/image/upload/${DELIVERY[kind]}/`;
+
   return {
     gymPrefix: (tenantId) => `${opts.folder}/gyms/${tenantId}`,
     deliveryUrl,
+
+    publicIdFromUrl(url, kind) {
+      const prefix = deliveryPrefix(kind);
+      if (!url.startsWith(prefix)) return null;
+      const id = url.slice(prefix.length);
+      // Only plain path ids: no query, fragment, traversal or empty segments.
+      return /^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(id) ? id : null;
+    },
+
+    async inspect(publicId) {
+      const res = await doFetch(
+        `${base.replace(/\/image$/, '')}/resources/image/upload/${publicId}`,
+        {
+          headers: {
+            authorization: `Basic ${Buffer.from(`${opts.apiKey}:${opts.apiSecret}`).toString('base64')}`,
+          },
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`Cloudinary resource lookup failed (${res.status})`);
+      const r = (await res.json()) as Partial<StoredImage>;
+      return {
+        format: String(r.format ?? '').toLowerCase(),
+        bytes: Number(r.bytes ?? 0),
+        width: Number(r.width ?? 0),
+        height: Number(r.height ?? 0),
+      };
+    },
 
     signUpload(publicId, kind) {
       const issued = now();
