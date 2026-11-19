@@ -26,10 +26,12 @@ const env = testEnv();
 const audit = createAuditService({ logger });
 const outbox = memoryMailer();
 let failSends = false;
+let skipSends = false;
 const flakyMailer: Mailer = {
   async send(m) {
     if (failSends) throw new Error('Resend rejected the email (500)');
-    await outbox.send(m);
+    if (skipSends) return { status: 'skipped', reason: 'kind_not_enabled' };
+    return outbox.send(m);
   },
 };
 const svc = createNotificationService({ env, mailer: flakyMailer, logger, audit });
@@ -76,6 +78,7 @@ describeWithDb('renewal reminders (real MongoDB)', () => {
     await resetDemo(appMailer);
     outbox.clear();
     failSends = false;
+    skipSends = false;
   });
 
   it('the scan queues one "expiring" reminder per membership, however often it runs', async () => {
@@ -113,6 +116,18 @@ describeWithDb('renewal reminders (real MongoDB)', () => {
     expect(mail.text).toContain('http://powerhouse.localhost:3000');
     expect(await inPH(() => svc.dispatch(at(11)))).toMatchObject({ sent: 0 });
     expect((await inPH(() => Notification.findOne().lean()))!.status).toBe('sent');
+  });
+
+  it('a reminder the mail policy skips is recorded as skipped (not sent) and not retried', async () => {
+    skipSends = true;
+    await inPH(() => svc.enqueueRenewalReminders(at(10)));
+    expect(await inPH(() => svc.dispatch(at(10)))).toMatchObject({ sent: 0, skipped: 1 });
+    const row = (await inPH(() => Notification.findOne().lean()))!;
+    expect(row).toMatchObject({ status: 'skipped', reason: 'kind_not_enabled' });
+    expect(row.sentAt ?? null).toBeNull();
+    skipSends = false;
+    expect(await inPH(() => svc.dispatch(at(11)))).toMatchObject({ sent: 0 });
+    expect(outbox.outbox).toHaveLength(0);
   });
 
   it('retries with growing delays, then gives up; the owner can retry', async () => {

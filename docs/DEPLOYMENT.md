@@ -117,13 +117,24 @@ One-time setup (needs the owner, not done yet):
 1. Create a Resend account and add the sending domain (e.g. `mail.yourapp.in`).
 2. Add the DNS records Resend shows (SPF, DKIM, and a DMARC record) in Cloudflare; wait for "Verified".
 3. Create an API key with **sending access only**, scoped to that domain.
-4. Set `MAIL_TRANSPORT=resend`, `RESEND_API_KEY=re_…`, `MAIL_FROM="Fitexaa <no-reply@mail.yourapp.in>"`. Gym emails keep this address but show the
-   gym's name as the sender, so members never see "Fitexaa".
+4. Set `MAIL_TRANSPORT=resend`, `RESEND_API_KEY=re_…`, `MAIL_FROM="Fitexaa <no-reply@mail.fitexaa.com>"`
+   (the verified domain). Gym emails keep this address but show the gym's name as the sender, so
+   members never see "Fitexaa".
+5. `MAIL_ENABLED_KINDS`: leave unset for sign-in emails only (`magic_link,password_reset,invite`,
+   owner's decision 2026-11-19). Add `renewal_reminder` when reminders should go out.
+6. Do **not** set `MAIL_ALLOWED_RECIPIENTS` (a development safety net) or `RESEND_DEBUG`.
 
-Startup refuses `resend` without a key or with a `localhost` sender. A provider outage doesn't break
-sign-in endpoints: magic-link and forgot-password still answer `202` (the failure is logged as
-`Email could not be sent`), and gym creation reports `inviteError: "send_failed"` so the invite can
-be resent. Watch the daily quota: past 100/day Resend refuses mail until the next day.
+Sending uses the official `resend` SDK (pinned), always against `https://api.resend.com`
+(`RESEND_BASE_URL` is ignored, so the key can't be redirected). Production refuses to start with
+`log`/`memory`, without a key, with a `localhost` sender, with `MAIL_ALLOWED_RECIPIENTS` set, or
+without `magic_link` in `MAIL_ENABLED_KINDS` (members sign in by email).
+
+A provider rejection, outage or 10 s timeout doesn't break anything. Magic-link and forgot-password
+still answer `202`, and the failure is logged as `Email could not be sent` with the error name and
+status only. Gym creation reports `inviteError: "send_failed"` so the invite can be resent.
+Reminders retry with backoff. Kinds that are not enabled are logged as `Email skipped: kind not
+enabled`, and a reminder is then recorded as `skipped` (`reason: kind_not_enabled`). Watch the daily
+quota: past 100/day Resend refuses mail until the next day.
 
 ## Renamed to Fitexaa (2026-11-18): effect on existing setups
 Defaults changed; anything set explicitly in an env file is untouched.

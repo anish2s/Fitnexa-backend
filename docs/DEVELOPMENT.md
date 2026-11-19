@@ -38,6 +38,24 @@ curl -H 'Host: powerhouse.localhost' -H 'Content-Type: application/json' \
 ```
 The super admin signs in on `admin.localhost:4000`.
 
+### Email in development
+- `MAIL_TRANSPORT=log` (default): nothing is sent; every email, with its link, is printed to the
+  API log.
+- `MAIL_TRANSPORT=resend`: real email through Resend, with two safety nets.
+  - **Allow-list.** Real mail goes only to the addresses in `MAIL_ALLOWED_RECIPIENTS`
+    (comma-separated, any case). Anything else is written to the log instead, exactly like `log`.
+    The seed's addresses (`@member.demo`, `@powerhouse.demo`) are fake: sending to them would
+    bounce and hurt the sending domain's reputation. If the list is empty, nothing is sent.
+  - **Kinds.** Only kinds in `MAIL_ENABLED_KINDS` go out (default `magic_link,password_reset,invite`).
+    Renewal reminders are skipped, logged as `Email skipped: kind not enabled`, and recorded as
+    `skipped` in the reminder queue.
+- The background jobs also run under `npm run dev`. With `resend`, set `JOBS_ENABLED=false` unless
+  you are testing reminders.
+- If Resend refuses, is down or takes over 10 s, the log says `Email could not be sent` with the
+  error name and status only (no address, content or link). The person asking for a link still
+  gets the same `202`.
+- Keep the key in `.env` only, never in code, commits, issues or chat. Don't set `RESEND_DEBUG`.
+
 ## Scripts
 | Script | What it does |
 |---|---|
@@ -75,5 +93,6 @@ The super admin signs in on `admin.localhost:4000`.
 
 ## Scheduled jobs in development
 `npm run dev` starts the reminder jobs too (`JOBS_ENABLED=true` by default). With the `log` mail
-transport, reminder emails only appear in the API log. Set `JOBS_ENABLED=false` in `.env` to keep the
+transport, reminder emails only appear in the API log; with `resend` they are skipped unless
+`renewal_reminder` is in `MAIL_ENABLED_KINDS` (see Email in development). Set `JOBS_ENABLED=false` in `.env` to keep the
 log quiet while working on something else.

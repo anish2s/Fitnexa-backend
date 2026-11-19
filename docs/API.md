@@ -468,7 +468,7 @@ Two scheduled jobs (see DEPLOYMENT.md) email members automatically:
   `renewalReminderDays` (started, not renewed, member not archived), and one `renewal_expired` within
   3 days after it ends without a renewal. Idempotent: never more than one of each per membership.
 - **Dispatcher** (every 5 min) sends due reminders **only 09:00–20:00 gym time**. It re-checks at
-  send time: renewed or cancelled → `cancelled`, archived → `cancelled`, no email → `skipped` (use the
+  send time: renewed or cancelled → `cancelled`, archived → `cancelled`, no email → `skipped`; not allowed by the mail config → `skipped` with `reason: kind_not_enabled` or `recipient_not_allowed` (dev allow-list) (use the
   WhatsApp link instead). Failures retry after 5 min, 30 min, 2 h, 12 h; the 5th failure is `failed`.
 - Owners switch it off with `PATCH /gym { settings: { renewalRemindersEnabled: false } }`.
 
@@ -528,13 +528,13 @@ Without Cloudinary credentials these endpoints answer `503 UPLOADS_NOT_CONFIGURE
 |---|---|---|
 | `GET /platform/tenants` | `?q&status&page&limit` (limit ≤ 100) | `[{ id, name, slug, status, city, subscriptionStatus, createdAt }]` + page meta |
 | `GET /platform/tenants/slug-availability` | `?slug=` | `{ slug, available, reason: null|invalid|reserved|taken }` |
-| `POST /platform/tenants` | `{ name, slug, email?, phone?, address?, settings?, branding?, subscription?, owner{ name, email, phone? } }` | `201 { tenant, appUrl, owner{ id, status: "invited" }, inviteSent, inviteError: null|throttled|send_failed }`. The gym is created even if the email fails; resend it. `409` if the slug isn't available. |
+| `POST /platform/tenants` | `{ name, slug, email?, phone?, address?, settings?, branding?, subscription?, owner{ name, email, phone? } }` | `201 { tenant, appUrl, owner{ id, status: "invited" }, inviteSent, inviteError: null|throttled|send_failed|kind_not_enabled|recipient_not_allowed }`. The gym is created even if the email fails; resend it. `409` if the slug isn't available. |
 | `GET /platform/tenants/:id` | — | `{ tenant, appUrl, owners[], userCounts{ owner, staff, member } }` |
 | `PATCH /platform/tenants/:id` | gym profile fields + `subscription{…}` | gym view |
 | `PATCH /platform/tenants/:id/branding` | branding fields | gym view |
 | `POST /platform/tenants/:id/suspend` | `{ reason }` (3–500 chars) | gym view. The gym's next request gets `403 TENANT_SUSPENDED`; sessions are kept. |
 | `POST /platform/tenants/:id/activate` | — | gym view. `409` if not suspended. |
-| `POST /platform/tenants/:id/owner-invite` | — | `202 { sent, ownerId, reason: null|throttled|send_failed }`. `409` if no owner is waiting. |
+| `POST /platform/tenants/:id/owner-invite` | — | `202 { sent, ownerId, reason: null|throttled|send_failed|kind_not_enabled|recipient_not_allowed }`. `409` if no owner is waiting. |
 | `POST /platform/tenants/:id/impersonate` | `{ reason }` (≥ 10 chars) | `201 { accessToken, expiresIn, expiresAt, user, gym, appUrl }` |
 | `GET /platform/tenants/:id/audit-logs` | audit filters | that gym's log |
 | `GET /platform/audit-logs` | audit filters | platform log (super admin sign-ins) |

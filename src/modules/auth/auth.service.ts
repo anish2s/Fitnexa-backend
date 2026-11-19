@@ -6,7 +6,7 @@ import { dummyHash, hashPassword, needsRehash, verifyPassword } from '../../auth
 import { hashToken, isWellFormedToken, randomToken } from '../../auth/tokens.js';
 import { Errors } from '../../lib/errors.js';
 import type { Logger } from '../../lib/logger.js';
-import type { MailMessage, Mailer } from '../../lib/mailer.js';
+import type { MailMessage, Mailer, SkipReason } from '../../lib/mailer.js';
 import { normalizePhone } from '../../lib/phone.js';
 import type { ResolvedTenant } from '../../tenancy/resolver.middleware.js';
 import type { AuditContext, AuditService } from '../audit/audit.service.js';
@@ -31,7 +31,7 @@ export interface ClientMeta {
 }
 
 export type InviteResult =
-  { sent: true } | { sent: false; reason: 'no_email' | 'throttled' | 'send_failed' };
+  { sent: true } | { sent: false; reason: 'no_email' | 'throttled' | 'send_failed' | SkipReason };
 
 export interface IssuedSession {
   accessToken: string;
@@ -79,15 +79,16 @@ export function createAuthService(deps: {
   /**
    * Sends and reports success instead of throwing. Magic-link and forgot-password must answer 202
    * whether or not the account exists; if a provider failure became a 500 only for real accounts,
-   * the endpoints would reveal who is registered. The failure is logged for the operator instead.
+   * the endpoints would reveal who is registered. The failure is logged for the operator instead
+   * (MailSendError carries no recipient, content or link).
    */
-  async function safeSend(message: MailMessage): Promise<boolean> {
+  async function safeSend(message: MailMessage): Promise<'sent' | 'send_failed' | SkipReason> {
     try {
-      await mailer.send(message);
-      return true;
+      const result = await mailer.send(message);
+      return result.status === 'sent' ? 'sent' : result.reason;
     } catch (err) {
       logger.error({ err, mail: { kind: message.kind } }, 'Email could not be sent');
-      return false;
+      return 'send_failed';
     }
   }
 
@@ -408,7 +409,7 @@ export function createAuthService(deps: {
       meta,
     );
     if (!token) return { sent: false, reason: 'throttled' };
-    const sent = await safeSend({
+    const outcome = await safeSend({
       kind: 'invite',
       fromName: tenant.name,
       to: user.email,
@@ -417,7 +418,8 @@ export function createAuthService(deps: {
         `Hi ${user.name},\n\nYou've been given access to ${tenant.name}. Set your password here ` +
         `(valid for ${env.INVITE_TTL_HOURS} hours):\n\n${appUrl(tenant, `/reset-password?token=${token}`)}`,
     });
-    return sent ? { sent: true } : { sent: false, reason: 'send_failed' };
+    // Unlike sign-in links, the inviter is told the outcome: they know the address already.
+    return outcome === 'sent' ? { sent: true } : { sent: false, reason: outcome };
   }
 
   /** Completes a password reset OR an invite. All existing sessions are revoked. */

@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import { z } from 'zod';
+import { DEFAULT_ENABLED_MAIL_KINDS, MAIL_KINDS } from '../lib/mail-kinds.js';
 
 /**
  * All configuration comes from environment variables and is validated once at startup.
@@ -133,6 +134,17 @@ export const envSchema = z
      * Gym mail keeps the address but shows the gym's name as the sender (see senderFor). */
     MAIL_FROM: z.string().trim().min(3).default('Fitexaa <no-reply@localhost>'),
     RESEND_API_KEY: z.string().trim().optional(),
+    /** Email kinds that may really be sent; any other kind is skipped and logged. */
+    MAIL_ENABLED_KINDS: z
+      .string()
+      .default(DEFAULT_ENABLED_MAIL_KINDS.join(','))
+      .transform(splitCsv)
+      .pipe(z.array(z.enum(MAIL_KINDS))),
+    /**
+     * Outside production, the only addresses real mail may go to (comma-separated); mail to anyone
+     * else is written to the log instead. Empty = nobody. Not allowed in production.
+     */
+    MAIL_ALLOWED_RECIPIENTS: csv.pipe(z.array(z.string().email('Not an email address'))),
 
     // --- Scheduled jobs (renewal reminders) ---
     /** Run cron jobs in this process. Safe with several instances (Mongo lease lock). */
@@ -212,6 +224,21 @@ export const envSchema = z
         code: 'custom',
         path: ['MAIL_TRANSPORT'],
         message: 'A real email provider (MAIL_TRANSPORT=resend) is required in production',
+      });
+    }
+    if (env.NODE_ENV === 'production' && env.MAIL_ALLOWED_RECIPIENTS.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_ALLOWED_RECIPIENTS'],
+        message: 'MAIL_ALLOWED_RECIPIENTS is a development safety net; remove it in production',
+      });
+    }
+    if (env.NODE_ENV === 'production' && !env.MAIL_ENABLED_KINDS.includes('magic_link')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAIL_ENABLED_KINDS'],
+        message:
+          'MAIL_ENABLED_KINDS must include magic_link in production (members sign in by email)',
       });
     }
     if (

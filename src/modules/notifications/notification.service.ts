@@ -201,13 +201,20 @@ export function createNotificationService(deps: {
         today,
       );
       try {
-        await mailer.send({
+        const result = await mailer.send({
           to: member.email,
           subject,
           text,
           kind: 'renewal_reminder',
           fromName: g.name,
         });
+        if (result.status === 'skipped') {
+          // Config says this email must not go out (kind not enabled, or a dev allow-list): record
+          // that rather than "sent", and don't retry.
+          await close('skipped', result.reason);
+          counts.skipped++;
+          continue;
+        }
         await Notification.updateOne(
           { _id: n._id },
           { $set: { status: 'sent', sentAt: now }, $inc: { attempts: 1 }, $unset: { reason: 1 } },

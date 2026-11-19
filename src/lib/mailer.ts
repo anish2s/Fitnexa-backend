@@ -1,12 +1,14 @@
+import { Resend } from 'resend';
 import type { Env } from '../config/env.js';
 import type { Logger } from './logger.js';
+import type { MailKind } from './mail-kinds.js';
 
 export interface MailMessage {
   to: string;
   subject: string;
   text: string;
-  /** Tag for tests/observability, e.g. 'magic_link'. Never contains secrets. */
-  kind: string;
+  /** What the email is for; decides whether it may be sent (MAIL_ENABLED_KINDS). No secrets. */
+  kind: MailKind;
   /**
    * Sender display name. Gym mail passes the gym's name so members only ever see their gym's
    * brand; the address always comes from MAIL_FROM (the verified sending domain).
@@ -31,14 +33,20 @@ export function senderFor(mailFrom: string, fromName?: string): string {
   return `"${name}" <${address}>`;
 }
 
+/** Why a message was deliberately not delivered. Not an error: nothing went wrong. */
+export type SkipReason = 'kind_not_enabled' | 'recipient_not_allowed';
+export type SendResult = { status: 'sent' } | { status: 'skipped'; reason: SkipReason };
+const SENT: SendResult = { status: 'sent' };
+
 /**
- * Email delivery interface. `send` throws when the provider refuses or can't be reached; callers
- * decide whether that fails the request (see safeSend in auth.service.ts).
+ * Email delivery interface. `send` resolves `sent`, or `skipped` when config says this email must
+ * not go out; it throws MailSendError when the provider refuses or can't be reached. Callers decide
+ * whether a failure fails the request (see safeSend in auth.service.ts).
  *
  * Transports: `log` (dev), `memory` (tests), `resend` (real delivery; owner's choice 2026-11-17).
  */
 export interface Mailer {
-  send(message: MailMessage): Promise<void>;
+  send(message: MailMessage): Promise<SendResult>;
 }
 
 /** Development: prints the email (including the link) to the log so you can click it locally. */
@@ -49,6 +57,7 @@ export function logMailer(logger: Logger): Mailer {
         { mail: { to: m.to, from: m.fromName ?? null, subject: m.subject, kind: m.kind } },
         `EMAIL (dev, not sent)\n${m.text}`,
       );
+      return SENT;
     },
   };
 }
@@ -60,6 +69,7 @@ export function memoryMailer() {
     outbox,
     async send(m) {
       outbox.push(m);
+      return SENT;
     },
     clear() {
       outbox.length = 0;
@@ -80,73 +90,120 @@ export class MailSendError extends Error {
   }
 }
 
+/** The one SDK call we use, so tests can pass a fake client. */
+export interface ResendClient {
+  emails: Pick<Resend['emails'], 'send'>;
+}
+
 export interface ResendOptions {
-  apiKey: string;
+  client: ResendClient;
   from: string;
   logger: Logger;
-  /** Injected in tests; defaults to the global fetch. */
-  fetch?: typeof fetch;
   timeoutMs?: number;
-  /** Override for tests only. */
-  endpoint?: string;
 }
 
 /**
- * Resend (https://resend.com) over its REST API, so no SDK dependency.
+ * Resend (https://resend.com) through its official Node SDK.
  *
- * Free plan: 100 emails/day, 3,000/month, and sending only from a domain verified in Resend.
- * Sign-in links and invites are the only mail today, so that is plenty for a pilot. No retries
- * here: every caller is a user action the user can repeat, and a retry loop could double-send a
- * one-time link.
+ * Free plan: 100 emails/day, 3,000/month, and sending only from a domain verified in Resend. No
+ * retries here: every caller is a user action the user can repeat (or the reminder queue, which
+ * has its own backoff), and a retry loop could double-send a one-time link.
+ *
+ * The SDK reports API and network errors as `{ error }` rather than throwing; both, and anything
+ * thrown, become MailSendError. Resend's error `message` can quote the recipient, so only its
+ * `name` and status code are kept.
  */
 export function resendMailer(opts: ResendOptions): Mailer {
-  const doFetch = opts.fetch ?? fetch;
-  const endpoint = opts.endpoint ?? 'https://api.resend.com/emails';
   const timeoutMs = opts.timeoutMs ?? 10_000;
-
   return {
     async send(m) {
-      let res: Response;
+      const signal = AbortSignal.timeout(timeoutMs);
+      let res: Awaited<ReturnType<ResendClient['emails']['send']>>;
       try {
-        res = await doFetch(endpoint, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${opts.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        res = await opts.client.emails.send(
+          {
             from: senderFor(opts.from, m.fromName),
             to: [m.to],
             subject: m.subject,
             text: m.text,
             tags: [{ name: 'kind', value: m.kind }],
-          }),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-      } catch (err) {
-        const reason = err instanceof Error && err.name === 'TimeoutError' ? 'timed out' : 'failed';
-        throw new MailSendError(`Resend request ${reason}`);
+          },
+          { signal },
+        );
+      } catch {
+        throw new MailSendError(`Resend request ${signal.aborted ? 'timed out' : 'failed'}`);
       }
-
-      const body = (await res.json().catch(() => ({}))) as {
-        id?: string;
-        name?: string;
-        message?: string;
-      };
-      if (!res.ok) {
-        // Resend's error message can quote the recipient; log only status and error name.
-        throw new MailSendError(`Resend rejected the email (${res.status})`, res.status, body.name);
+      if (res.error) {
+        if (signal.aborted) throw new MailSendError('Resend request timed out');
+        const status = res.error.statusCode ?? undefined;
+        throw new MailSendError(
+          status ? `Resend rejected the email (${status})` : 'Resend request failed',
+          status,
+          res.error.name,
+        );
       }
-      opts.logger.info({ mail: { kind: m.kind, providerId: body.id } }, 'Email sent');
+      opts.logger.info({ mail: { kind: m.kind, providerId: res.data?.id } }, 'Email sent');
+      return SENT;
     },
   };
 }
+
+export interface MailPolicy {
+  enabledKinds: ReadonlySet<MailKind>;
+  /** Lower-cased addresses real mail may go to; null = anyone (production). */
+  allowedRecipients: ReadonlySet<string> | null;
+  /** Where mail for other recipients goes instead (the log transport). */
+  divert: Mailer;
+  logger: Logger;
+}
+
+/**
+ * Decides what a real transport may send. Kinds not enabled are dropped. Outside production, mail
+ * to anyone not on the allow-list is diverted to the log: the seed uses fake addresses
+ * (@member.demo) and bounces would hurt the sending domain's reputation. Neither log line carries
+ * the recipient or content, except the diverted copy, which only happens outside production.
+ */
+export function withMailPolicy(inner: Mailer, policy: MailPolicy): Mailer {
+  return {
+    async send(m) {
+      if (!policy.enabledKinds.has(m.kind)) {
+        policy.logger.info({ mail: { kind: m.kind } }, 'Email skipped: kind not enabled');
+        return { status: 'skipped', reason: 'kind_not_enabled' };
+      }
+      if (policy.allowedRecipients && !policy.allowedRecipients.has(m.to.trim().toLowerCase())) {
+        policy.logger.info(
+          { mail: { kind: m.kind } },
+          'Email not sent: recipient not in MAIL_ALLOWED_RECIPIENTS; logged instead',
+        );
+        await policy.divert.send(m);
+        return { status: 'skipped', reason: 'recipient_not_allowed' };
+      }
+      return inner.send(m);
+    },
+  };
+}
+
+/** The official API host, pinned: the SDK would otherwise honour a RESEND_BASE_URL env var. */
+const RESEND_API = 'https://api.resend.com';
 
 /** Picks the transport from config. Production config refuses log/memory (see env.ts). */
 export function createMailer(env: Env, logger: Logger): Mailer {
   switch (env.MAIL_TRANSPORT) {
     case 'resend':
-      return resendMailer({ apiKey: env.RESEND_API_KEY!, from: env.MAIL_FROM, logger });
+      return withMailPolicy(
+        resendMailer({
+          client: new Resend(env.RESEND_API_KEY, { baseUrl: RESEND_API }),
+          from: env.MAIL_FROM,
+          logger,
+        }),
+        {
+          enabledKinds: new Set(env.MAIL_ENABLED_KINDS),
+          allowedRecipients:
+            env.NODE_ENV === 'production' ? null : new Set(env.MAIL_ALLOWED_RECIPIENTS),
+          divert: logMailer(logger),
+          logger,
+        },
+      );
     case 'memory':
       return memoryMailer();
     default:

@@ -72,11 +72,12 @@ export function buildTestApp(
     mailer?: Mailer;
     images?: ImageStore | null;
     razorpay?: RazorpayClient;
+    logger?: ReturnType<typeof createLogger>;
   } = {},
 ) {
   return createApp({
     env: testEnv(opts.env),
-    logger: createLogger('silent'),
+    logger: opts.logger ?? createLogger('silent'),
     tenantLookup: opts.lookup ?? stubLookup,
     isDbReady: () => opts.dbReady ?? true,
     mailer: opts.mailer ?? memoryMailer(),

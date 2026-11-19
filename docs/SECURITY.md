@@ -60,6 +60,9 @@ Status legend: ✅ implemented & tested · 🟡 implemented, not yet verified ·
 | Cookie endpoints reject cross-origin / `Sec-Fetch-Site: cross-site` requests (CSRF between sibling gym subdomains) | ✅ |
 | Member email links: 256-bit, hashed at rest, single use (atomic consume, concurrent clicks give one session), 15 min, max 3 per 15 min, gym-bound | ✅ |
 | Link/forgot endpoints never reveal whether an email is registered | ✅ |
+| Email provider failures (rejection, outage, 10 s timeout) are logged with error name and status only, never the address, content or link; sign-in requesters always get the same `202` | ✅ |
+| Resend key only in env; SDK pinned to `https://api.resend.com` (a `RESEND_BASE_URL` can't redirect the key); `RESEND_DEBUG` must stay unset (it prints raw API errors) | ✅ |
+| Only enabled email kinds are sent (`MAIL_ENABLED_KINDS`); outside production real mail goes only to `MAIL_ALLOWED_RECIPIENTS`; production refuses an allow-list | ✅ |
 | Gym emails use the gym's name as the sender display name; it is stripped of control characters, quotes, `\\` and `<>` and capped at 64 characters, so an owner-entered gym name can't inject mail headers or change the sending address (`senderFor`, unit-tested) | ✅ |
 | Password reset / invite: single use, 30 min / 72 h, ends all sessions, kills other outstanding links | ✅ |
 | Change password ends all other sessions | ✅ |
