@@ -1,6 +1,7 @@
 import { isIP } from 'node:net';
 import { z } from 'zod';
 import { DEFAULT_ENABLED_MAIL_KINDS, MAIL_KINDS } from '../lib/mail-kinds.js';
+import { isPlusPattern, plusPatternExample } from '../lib/mail-recipients.js';
 
 /**
  * All configuration comes from environment variables and is validated once at startup.
@@ -142,9 +143,21 @@ export const envSchema = z
       .pipe(z.array(z.enum(MAIL_KINDS))),
     /**
      * Outside production, the only addresses real mail may go to (comma-separated); mail to anyone
-     * else is written to the log instead. Empty = nobody. Not allowed in production.
+     * else is written to the log instead. `name+*@domain` matches every plus-address of that inbox
+     * (see mail-recipients.ts). Empty = nobody. Not allowed in production.
      */
-    MAIL_ALLOWED_RECIPIENTS: csv.pipe(z.array(z.string().email('Not an email address'))),
+    MAIL_ALLOWED_RECIPIENTS: csv.pipe(
+      z.array(
+        z.string().refine(
+          (v) =>
+            z
+              .string()
+              .email()
+              .safeParse(isPlusPattern(v) ? plusPatternExample(v) : v).success,
+          'Not an email address or a name+*@domain pattern',
+        ),
+      ),
+    ),
 
     // --- Scheduled jobs (renewal reminders) ---
     /** Run cron jobs in this process. Safe with several instances (Mongo lease lock). */

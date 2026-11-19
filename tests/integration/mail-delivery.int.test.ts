@@ -47,6 +47,7 @@ const ALLOWED = [
   'owner@powerhouse.demo',
   'newowner@realmail.in',
   'failowner@realmail.in',
+  'tester+*@realmail.in',
 ];
 const mailer = withMailPolicy(
   resendMailer({
@@ -172,6 +173,11 @@ describeWithDb('email delivery through Resend (mocked client, real MongoDB)', ()
     const allowed = await create('allowedgym', 'newowner@realmail.in');
     expect(allowed.status).toBe(201);
     expect(allowed.body.data).toMatchObject({ inviteSent: true, inviteError: null });
+
+    const plus = await create('plusgym', 'Tester+plusgym@realmail.in');
+    expect(plus.status).toBe(201);
+    expect(plus.body.data).toMatchObject({ inviteSent: true, inviteError: null });
+    expect(send.mock.calls.at(-1)![0]).toMatchObject({ to: ['tester+plusgym@realmail.in'] });
 
     const blocked = await create('blockedgym', 'someone@member.demo');
     expect(blocked.status).toBe(201);

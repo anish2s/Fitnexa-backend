@@ -43,7 +43,12 @@ The super admin signs in on `admin.localhost:4000`.
   API log.
 - `MAIL_TRANSPORT=resend`: real email through Resend, with two safety nets.
   - **Allow-list.** Real mail goes only to the addresses in `MAIL_ALLOWED_RECIPIENTS`
-    (comma-separated, any case). Anything else is written to the log instead, exactly like `log`.
+    (comma-separated, any case). An entry `name+*@domain` matches every plus-address of that
+    inbox, e.g. `kumaranish1708+*@gmail.com` allows `kumaranish1708+owner1@gmail.com` and
+    `kumaranish1708+gymtest@gmail.com` (Gmail delivers them all to `kumaranish1708@gmail.com`), so
+    each test owner or member can have their own address. The bare address is not included; list it
+    too if you need it. No other wildcard is accepted (`*@gmail.com` is refused at startup).
+    Anything else is written to the log instead, exactly like `log`.
     The seed's addresses (`@member.demo`, `@powerhouse.demo`) are fake: sending to them would
     bounce and hurt the sending domain's reputation. If the list is empty, nothing is sent.
   - **Kinds.** Only kinds in `MAIL_ENABLED_KINDS` go out (default `magic_link,password_reset,invite`).

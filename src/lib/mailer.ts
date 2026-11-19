@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import type { Env } from '../config/env.js';
 import type { Logger } from './logger.js';
 import type { MailKind } from './mail-kinds.js';
+import { recipientMatcher } from './mail-recipients.js';
 
 export interface MailMessage {
   to: string;
@@ -150,8 +151,11 @@ export function resendMailer(opts: ResendOptions): Mailer {
 
 export interface MailPolicy {
   enabledKinds: ReadonlySet<MailKind>;
-  /** Lower-cased addresses real mail may go to; null = anyone (production). */
-  allowedRecipients: ReadonlySet<string> | null;
+  /**
+   * Addresses (or `name+*@domain` patterns, see mail-recipients.ts) real mail may go to;
+   * null = anyone (production).
+   */
+  allowedRecipients: Iterable<string> | null;
   /** Where mail for other recipients goes instead (the log transport). */
   divert: Mailer;
   logger: Logger;
@@ -164,13 +168,14 @@ export interface MailPolicy {
  * the recipient or content, except the diverted copy, which only happens outside production.
  */
 export function withMailPolicy(inner: Mailer, policy: MailPolicy): Mailer {
+  const allowed = policy.allowedRecipients ? recipientMatcher(policy.allowedRecipients) : null;
   return {
     async send(m) {
       if (!policy.enabledKinds.has(m.kind)) {
         policy.logger.info({ mail: { kind: m.kind } }, 'Email skipped: kind not enabled');
         return { status: 'skipped', reason: 'kind_not_enabled' };
       }
-      if (policy.allowedRecipients && !policy.allowedRecipients.has(m.to.trim().toLowerCase())) {
+      if (allowed && !allowed(m.to)) {
         policy.logger.info(
           { mail: { kind: m.kind } },
           'Email not sent: recipient not in MAIL_ALLOWED_RECIPIENTS; logged instead',
@@ -198,8 +203,7 @@ export function createMailer(env: Env, logger: Logger): Mailer {
         }),
         {
           enabledKinds: new Set(env.MAIL_ENABLED_KINDS),
-          allowedRecipients:
-            env.NODE_ENV === 'production' ? null : new Set(env.MAIL_ALLOWED_RECIPIENTS),
+          allowedRecipients: env.NODE_ENV === 'production' ? null : env.MAIL_ALLOWED_RECIPIENTS,
           divert: logMailer(logger),
           logger,
         },

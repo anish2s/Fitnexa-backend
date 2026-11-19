@@ -166,6 +166,37 @@ describe('withMailPolicy', () => {
     expect(divert.outbox.map((m) => m.to)).toEqual(['arjun@member.demo']);
   });
 
+  it('allow-list pattern name+*@domain: every plus-address of that inbox, nothing else', async () => {
+    const { mailer, send, divert } = policy(['Kumaranish1708+*@gmail.com', 'me@x.in']);
+    for (const to of [
+      'kumaranish1708+owner1@gmail.com',
+      'KumarAnish1708+Gym.Test-2@Gmail.com',
+      'me@x.in',
+    ]) {
+      expect(await mailer.send({ ...msg, to }), to).toEqual({ status: 'sent' });
+    }
+    expect(send).toHaveBeenCalledTimes(3);
+
+    const refused = [
+      'kumaranish1708@gmail.com', // the bare inbox is not a plus-address; list it separately
+      'kumaranish1708+@gmail.com', // empty tag
+      'kumaranish17080+x@gmail.com', // a different local part that shares the prefix
+      'xkumaranish1708+x@gmail.com',
+      'kumaranish1708+x@gmail.com.evil.in',
+      'kumaranish1708+x@googlemail.com',
+      'kumaranish1708+x@evil.in',
+      'me+x@x.in', // exact entries don't become patterns
+    ];
+    for (const to of refused) {
+      expect(await mailer.send({ ...msg, to }), to).toEqual({
+        status: 'skipped',
+        reason: 'recipient_not_allowed',
+      });
+    }
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(divert.outbox.map((m) => m.to)).toEqual(refused);
+  });
+
   it('an empty allow-list sends nothing; no allow-list (production) sends to anyone', async () => {
     const none = policy([]);
     await none.mailer.send(msg);
@@ -258,6 +289,29 @@ describe('mail config', () => {
     expect(() => parseEnv({ ...base, MAIL_ALLOWED_RECIPIENTS: 'me@gmail.com,nope' })).toThrow(
       /MAIL_ALLOWED_RECIPIENTS/,
     );
+  });
+
+  it('allow-list accepts name+*@domain and refuses any other wildcard', () => {
+    expect(
+      parseEnv({ ...base, MAIL_ALLOWED_RECIPIENTS: 'KumarAnish1708+*@gmail.com, me@x.in' })
+        .MAIL_ALLOWED_RECIPIENTS,
+    ).toEqual(['kumaranish1708+*@gmail.com', 'me@x.in']);
+    for (const bad of [
+      '*@gmail.com',
+      'me*@gmail.com',
+      'me+*@*.com',
+      'me+*@gmail',
+      '+*@gmail.com',
+      'me+a*@gmail.com',
+      'me+*',
+    ]) {
+      expect(() => parseEnv({ ...base, MAIL_ALLOWED_RECIPIENTS: bad }), bad).toThrow(
+        /MAIL_ALLOWED_RECIPIENTS/,
+      );
+    }
+    expect(() =>
+      parseEnv({ ...prod, ...resend, MAIL_ALLOWED_RECIPIENTS: 'me+*@gmail.com' }),
+    ).toThrow(/MAIL_ALLOWED_RECIPIENTS/);
   });
 
   it('production needs a real provider, sign-in emails enabled, and no allow-list', () => {
