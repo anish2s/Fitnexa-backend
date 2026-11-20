@@ -85,10 +85,11 @@ logo URLs with it so a change shows at once. Cached for 60 s.
 
 ## Member and staff addresses (Phase 3)
 
-Members use the gym's main address (`powerhouse.yourapp.in`, the member app); owners and staff use a
-separate staff address (`powerhouse.<staff base>`, the dashboard). Configure with `STAFF_BASE_DOMAINS`
-(e.g. `staff.yourapp.in`; locally `staff.localhost`). The longest matching base domain wins, so
-`powerhouse.staff.localhost` is the staff site of the gym `powerhouse`. Each gym request has a site:
+Members and staff use separate addresses. The owner's layout (2026-11-20): members on
+`powerhouse.pwa.yourapp.in` (the member app; `BASE_DOMAINS=pwa.yourapp.in`), owners and staff on
+`powerhouse.yourapp.in` (the dashboard; `STAFF_BASE_DOMAINS=yourapp.in`), platform on `admin.yourapp.in`.
+The longest matching base domain wins, so `powerhouse.pwa.yourapp.in` is a member site although it also
+ends in `yourapp.in`. `pwa` and `staff` are reserved subdomains. Each gym request has a site:
 
 | Site | When | Allowed |
 |---|---|---|
