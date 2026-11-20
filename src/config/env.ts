@@ -82,6 +82,16 @@ export const envSchema = z
      * address serves staff and members alike (the behaviour before Phase 3).
      */
     STAFF_BASE_DOMAINS: csv,
+    /**
+     * Member addresses by suffix instead of by domain (owner's layout, 2026-11-20): with "-pwa",
+     * `<slug>-pwa.<base>` is the member app and `<slug>.<base>` the staff dashboard. One level under the
+     * base domain, so the free wildcard certificate covers both. Empty = off.
+     */
+    MEMBER_HOST_SUFFIX: z
+      .string()
+      .trim()
+      .regex(/^(-[a-z0-9]{1,10})?$/, 'Use a hyphen and 1–10 lowercase letters or digits, e.g. -pwa')
+      .default(''),
     /** Subdomains that never resolve to a gym (platform/admin surfaces). */
     RESERVED_SUBDOMAINS: z
       .string()
@@ -344,6 +354,14 @@ export const envSchema = z
     }
     {
       // A staff base must not equal a gym base (the same host would be both sites).
+      if (env.MEMBER_HOST_SUFFIX && env.STAFF_BASE_DOMAINS.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['MEMBER_HOST_SUFFIX'],
+          message:
+            'Use either MEMBER_HOST_SUFFIX or STAFF_BASE_DOMAINS to separate member and staff addresses, not both',
+        });
+      }
       const overlap = env.STAFF_BASE_DOMAINS.filter((d) => env.BASE_DOMAINS.includes(d));
       if (overlap.length > 0) {
         ctx.addIssue({

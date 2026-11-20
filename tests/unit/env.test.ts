@@ -61,26 +61,27 @@ describe('parseEnv', () => {
     expect(parseEnv({ ...prod, TRUST_PROXY: 'uniquelocal' }).TRUST_PROXY).toEqual(['uniquelocal']);
   });
 
-  it("accepts the owner's production layout: members on <gym>.pwa.<domain>, staff on <gym>.<domain>", () => {
-    const env = parseEnv({
+  it("accepts the owner's production layout: members on <gym>-pwa.<domain>, staff on <gym>.<domain>", () => {
+    const prod = {
       ...base,
       NODE_ENV: 'production',
-      BASE_DOMAINS: 'pwa.yourapp.in',
-      STAFF_BASE_DOMAINS: 'yourapp.in',
-      GYM_APP_URL_TEMPLATE: 'https://{slug}.pwa.yourapp.in',
+      BASE_DOMAINS: 'yourapp.in',
+      MEMBER_HOST_SUFFIX: '-pwa',
+      GYM_APP_URL_TEMPLATE: 'https://{slug}-pwa.yourapp.in',
       STAFF_APP_URL_TEMPLATE: 'https://{slug}.yourapp.in',
-      CORS_ORIGINS: 'https://*.yourapp.in,https://*.pwa.yourapp.in',
+      CORS_ORIGINS: 'https://*.yourapp.in',
       TRUST_PROXY: 'uniquelocal',
       MAIL_TRANSPORT: 'resend',
       RESEND_API_KEY: 're_test_12345678',
       MAIL_FROM: 'Gym <no-reply@yourapp.in>',
-    });
-    expect([env.BASE_DOMAINS, env.STAFF_BASE_DOMAINS]).toEqual([
-      ['pwa.yourapp.in'],
-      ['yourapp.in'],
-    ]);
-    // Neither "pwa" nor "staff" can ever be a gym's subdomain.
+    };
+    const env = parseEnv(prod);
+    expect(env.MEMBER_HOST_SUFFIX).toBe('-pwa');
     expect(env.RESERVED_SUBDOMAINS).toEqual(expect.arrayContaining(['pwa', 'staff', 'admin']));
+    // One way to separate the addresses, not two; and a sane suffix.
+    expect(() => parseEnv({ ...prod, STAFF_BASE_DOMAINS: 'staff.yourapp.in' })).toThrow(/not both/);
+    expect(() => parseEnv({ ...prod, MEMBER_HOST_SUFFIX: 'pwa' })).toThrow(/hyphen/);
+    expect(parseEnv(base).MEMBER_HOST_SUFFIX).toBe('');
   });
 
   it('requires a long JWT secret', () => {

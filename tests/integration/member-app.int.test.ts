@@ -7,7 +7,7 @@ import { Plan } from '../../src/modules/plans/plan.model.js';
 import { Tenant } from '../../src/modules/tenants/tenant.model.js';
 import { runInTenant } from '../../src/tenancy/context.js';
 import { connectTestDb, describeWithDb, dropAndDisconnect } from '../helpers/db.js';
-import { PH, PLATFORM, gymId, intApp, resetDemo } from '../helpers/int.js';
+import { PASSWORD, PH, PLATFORM, gymId, intApp, resetDemo } from '../helpers/int.js';
 
 /**
  * Phase 3 member app backend: separate member/staff addresses (WRONG_SITE), the gym's public
@@ -20,6 +20,13 @@ const split = intApp({
   GYM_APP_URL_TEMPLATE: 'http://{slug}.localhost:3005',
 });
 const plain = intApp();
+/** The owner's layout (2026-11-20): members on <gym>-pwa.<domain>, staff on <gym>.<domain>. */
+const suffixed = intApp({
+  MEMBER_HOST_SUFFIX: '-pwa',
+  STAFF_APP_URL_TEMPLATE: 'http://{slug}.localhost:3001',
+  GYM_APP_URL_TEMPLATE: 'http://{slug}-pwa.localhost:3005',
+});
+const MEMBER_PH = 'powerhouse-pwa.localhost';
 
 /** The refresh cookie from a session response. */
 const cookieOf = (res: request.Response) =>
@@ -39,6 +46,51 @@ describeWithDb('member app backend (real MongoDB)', () => {
     await resetDemo(split.mailer);
     plain.mailer.clear();
     ph = await gymId('powerhouse');
+  });
+
+  it("owner's layout: <gym>-pwa is the member app, <gym> the staff dashboard; names ending -pwa are reserved", async () => {
+    suffixed.mailer.clear();
+    expect((await suffixed.call('get', MEMBER_PH, '/public/tenant')).body.data).toMatchObject({
+      slug: 'powerhouse',
+      site: 'member',
+    });
+    expect((await suffixed.call('get', PH, '/public/tenant')).body.data.site).toBe('staff');
+
+    // Staff sign in on the main address only; members by email link on the -pwa address only.
+    expect(
+      (
+        await suffixed
+          .call('post', MEMBER_PH, '/auth/login')
+          .send({ identifier: 'owner@powerhouse.demo', password: PASSWORD })
+      ).body.error.code,
+    ).toBe('WRONG_SITE');
+    expect(
+      (await suffixed.call('post', PH, '/auth/magic-link').send({ email: 'priya@member.demo' }))
+        .body.error.code,
+    ).toBe('WRONG_SITE');
+    const member = await suffixed.memberToken(MEMBER_PH, 'priya@member.demo');
+    expect((await suffixed.call('get', MEMBER_PH, '/members/me', member)).status).toBe(200);
+    expect((await suffixed.call('get', PH, '/members/me', member)).body.error.code).toBe(
+      'WRONG_SITE',
+    );
+    // The sign-in email links to the -pwa address.
+    expect(suffixed.mailer.outbox.at(-1)?.text).toContain(
+      'http://powerhouse-pwa.localhost:3005/login/verify?token=',
+    );
+
+    // A gym can't be created as "<name>-pwa" (it would clash with <name>'s member address).
+    const admin = await suffixed.tokenFor(PLATFORM, 'admin@platform.demo');
+    const check = async (slug: string) =>
+      (
+        await suffixed.call(
+          'get',
+          PLATFORM,
+          `/platform/tenants/slug-availability?slug=${slug}`,
+          admin,
+        )
+      ).body.data;
+    expect(await check('newgym-pwa')).toMatchObject({ available: false, reason: 'reserved' });
+    expect(await check('newgym')).toMatchObject({ available: true });
   });
 
   it('public branding says which site the address is, and carries only the business contact', async () => {

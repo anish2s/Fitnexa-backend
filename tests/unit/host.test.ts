@@ -113,7 +113,7 @@ describe('staff addresses (STAFF_BASE_DOMAINS)', () => {
   });
 });
 
-describe("owner's layout (2026-11-20): members on <gym>.pwa.<domain>, staff on the main <gym>.<domain>", () => {
+describe('domain layout (supported, not used): members on <gym>.pwa.<domain>, staff on <gym>.<domain>', () => {
   // BASE_DOMAINS = the member addresses, STAFF_BASE_DOMAINS = the staff (main) addresses.
   const MEMBER = ['pwa.yourapp.in', 'pwa.localhost'];
   const STAFF = ['yourapp.in', 'localhost'];
@@ -143,5 +143,38 @@ describe("owner's layout (2026-11-20): members on <gym>.pwa.<domain>, staff on t
     expect(rl('yourapp.in')).toEqual({ kind: 'platform' });
     expect(rl('pwa.yourapp.in')).toEqual({ kind: 'platform' });
     expect(rl('a.powerhouse.pwa.yourapp.in')).toEqual({ kind: 'invalid' });
+  });
+});
+
+describe("owner's layout (2026-11-20): members on <gym>-pwa.<domain>, staff on <gym>.<domain> (MEMBER_HOST_SUFFIX)", () => {
+  const RES = ['www', 'api', 'app', 'admin', 'platform', 'pwa', 'staff'];
+  const rx = (h: string) => resolveHost(h, BASES, RES, [], '-pwa');
+  const site = (h: string) => siteKindOf(rx(h), true, true);
+
+  it('<gym>-pwa is the member app, <gym> the staff dashboard, on the same base domain', () => {
+    expect(rx('powerhouse-pwa.yourapp.in')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'member',
+    });
+    expect(site('powerhouse-pwa.yourapp.in')).toBe('member');
+    expect(rx('powerhouse.yourapp.in')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'gym',
+    });
+    expect(site('powerhouse.yourapp.in')).toBe('staff');
+    expect(site('powerhouse-pwa.localhost:3005')).toBe('member');
+    expect(site('powerhouse.localhost:3001')).toBe('staff');
+    expect(site('my-gym-pwa.yourapp.in')).toBe('member'); // hyphenated gym names work
+    expect((rx('my-gym-pwa.yourapp.in') as { slug: string }).slug).toBe('my-gym');
+  });
+
+  it('platform names stay the platform; "-pwa" alone, deeper names and custom domains', () => {
+    expect(rx('admin.yourapp.in')).toEqual({ kind: 'platform' });
+    expect(rx('admin-pwa.yourapp.in')).toEqual({ kind: 'platform' });
+    expect(rx('-pwa.yourapp.in')).toEqual({ kind: 'invalid' });
+    expect(rx('a.powerhouse-pwa.yourapp.in')).toEqual({ kind: 'invalid' });
+    expect(siteKindOf(rx('app.powerhousegym.in'), true, true)).toBe('member');
   });
 });

@@ -5,12 +5,14 @@
  *   powerhouse.localhost:4000    → { kind: 'subdomain', slug: 'powerhouse', base: 'gym' }
  *   powerhouse.staff.yourapp.in  → { kind: 'subdomain', slug: 'powerhouse', base: 'staff' }
  *                                  (with "staff.yourapp.in" in STAFF_BASE_DOMAINS)
+ *   powerhouse-pwa.yourapp.in    → { kind: 'subdomain', slug: 'powerhouse', base: 'member' }
+ *                                  (with MEMBER_HOST_SUFFIX "-pwa": the owner's layout, 2026-11-20)
  *   yourapp.in / www.yourapp.in  → { kind: 'platform' }
  *   app.powerhousegym.in         → { kind: 'customDomain', domain: 'app.powerhousegym.in' }
  *   a.b.yourapp.in               → { kind: 'invalid' }   (nested subdomains are never tenants)
  */
 export type HostResolution =
-  | { kind: 'subdomain'; slug: string; base: 'gym' | 'staff' }
+  | { kind: 'subdomain'; slug: string; base: 'gym' | 'staff' | 'member' }
   | { kind: 'customDomain'; domain: string }
   | { kind: 'platform' }
   | { kind: 'invalid' };
@@ -44,6 +46,8 @@ export function resolveHost(
   baseDomains: readonly string[],
   reservedSubdomains: readonly string[],
   staffBaseDomains: readonly string[] = [],
+  /** MEMBER_HOST_SUFFIX, e.g. "-pwa": `<slug>-pwa.<base>` is the gym's member address. */
+  memberSuffix = '',
 ): HostResolution {
   const host = normalizeHost(rawHost);
   if (!host) return { kind: 'invalid' };
@@ -62,6 +66,16 @@ export function resolveHost(
       const sub = host.slice(0, -(d.length + 1));
       if (sub.includes('.')) return { kind: 'invalid' };
       if (reservedSubdomains.includes(sub)) return { kind: 'platform' };
+      if (
+        memberSuffix &&
+        base === 'gym' &&
+        sub.endsWith(memberSuffix) &&
+        sub.length > memberSuffix.length
+      ) {
+        const slug = sub.slice(0, -memberSuffix.length);
+        if (reservedSubdomains.includes(slug)) return { kind: 'platform' };
+        return { kind: 'subdomain', slug, base: 'member' };
+      }
       return { kind: 'subdomain', slug: sub, base };
     }
   }
@@ -72,8 +86,15 @@ export function resolveHost(
  * The site kind of a gym host. Custom domains are the gym's own member-facing address (the staff
  * dashboard always lives under a staff base domain once one is configured).
  */
-export function siteKindOf(resolution: HostResolution, staffSplit: boolean): SiteKind {
-  if (!staffSplit) return 'any';
+export function siteKindOf(
+  resolution: HostResolution,
+  split: boolean,
+  memberSuffix = false,
+): SiteKind {
+  if (!split) return 'any';
   if (resolution.kind === 'subdomain' && resolution.base === 'staff') return 'staff';
+  if (resolution.kind === 'subdomain' && resolution.base === 'member') return 'member';
+  // With a member suffix, the plain <slug>.<base> address belongs to staff.
+  if (memberSuffix && resolution.kind === 'subdomain') return 'staff';
   return 'member';
 }

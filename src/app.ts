@@ -163,6 +163,7 @@ export function createApp(deps: AppDeps) {
       lookup: deps.tenantLookup,
       baseDomains: env.BASE_DOMAINS,
       staffBaseDomains: env.STAFF_BASE_DOMAINS,
+      memberHostSuffix: env.MEMBER_HOST_SUFFIX,
       reservedSubdomains: env.RESERVED_SUBDOMAINS,
       allowTenantHeader: env.ALLOW_TENANT_HEADER,
     }),

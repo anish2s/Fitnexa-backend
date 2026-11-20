@@ -65,6 +65,8 @@ export function createPlatformService(deps: {
     // "--" is excluded too: it blocks punycode (xn--) look-alike subdomains.
     if (!SUBDOMAIN_PATTERN.test(slug) || slug.includes('--')) return 'invalid';
     if (env.RESERVED_SUBDOMAINS.includes(slug)) return 'reserved';
+    // "<name>-pwa" would collide with gym <name>'s member address (MEMBER_HOST_SUFFIX).
+    if (env.MEMBER_HOST_SUFFIX && slug.endsWith(env.MEMBER_HOST_SUFFIX)) return 'reserved';
     if (await Tenant.exists({ slug })) return 'taken';
     return null;
   }

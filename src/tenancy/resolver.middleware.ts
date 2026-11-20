@@ -23,8 +23,10 @@ export interface TenantLookup {
 export interface ResolverOptions {
   lookup: TenantLookup;
   baseDomains: readonly string[];
-  /** STAFF_BASE_DOMAINS; empty = no staff/member split. */
+  /** STAFF_BASE_DOMAINS; empty = no staff/member split by domain. */
   staffBaseDomains?: readonly string[];
+  /** MEMBER_HOST_SUFFIX (e.g. "-pwa"): `<slug>-pwa.<base>` = member site, `<slug>.<base>` = staff site. */
+  memberHostSuffix?: string;
   reservedSubdomains: readonly string[];
   /** Dev only: honor X-Tenant-Slug. Config validation forbids this in production. */
   allowTenantHeader: boolean;
@@ -53,6 +55,7 @@ export function resolveTenant(opts: ResolverOptions): RequestHandler {
       : undefined;
 
     const staffBases = opts.staffBaseDomains ?? [];
+    const suffix = opts.memberHostSuffix ?? '';
     let tenant: ResolvedTenant | null = null;
     let site: SiteKind = 'any';
     if (headerSlug) {
@@ -66,8 +69,9 @@ export function resolveTenant(opts: ResolverOptions): RequestHandler {
         opts.baseDomains,
         opts.reservedSubdomains,
         staffBases,
+        suffix,
       );
-      site = siteKindOf(resolution, staffBases.length > 0);
+      site = siteKindOf(resolution, staffBases.length > 0 || suffix !== '', suffix !== '');
       switch (resolution.kind) {
         case 'platform':
           return next();

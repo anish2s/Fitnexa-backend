@@ -38,28 +38,29 @@ Without a forwarded IP every visitor would share the Next.js server's single rat
 (300 requests/min), so a busy gym would lock everyone out: don't "fix" that by raising the limit.
 
 ### Member and staff addresses (Phase 3)
-**Owner's decision (2026-11-20):** members use **`https://<gym>.pwa.yourapp.in`** (the member app);
+**Owner's decision (2026-11-20):** members use **`https://<gym>-pwa.yourapp.in`** (the member app);
 owners and staff keep the gym's main address **`https://<gym>.yourapp.in`** (the dashboard); the platform
-console stays on `https://admin.yourapp.in`. (Names in the settings are historical: `BASE_DOMAINS` are
-the member addresses, `STAFF_BASE_DOMAINS` the staff ones; the longest matching domain wins, so
-`<gym>.pwa.yourapp.in` is the member site even though it also ends in `yourapp.in`.)
+console stays on `https://admin.yourapp.in`. Both are one level under `yourapp.in`, so Cloudflare's free
+Universal SSL certificate (`*.yourapp.in`) covers them: no paid certificate needed.
 
 | Variable | Production | Local development |
 |---|---|---|
-| `BASE_DOMAINS` | `pwa.yourapp.in` | `pwa.localhost` |
-| `STAFF_BASE_DOMAINS` | `yourapp.in` | `localhost` |
-| `GYM_APP_URL_TEMPLATE` (member links: email sign-in, WhatsApp, reminders) | `https://{slug}.pwa.yourapp.in` | `http://{slug}.pwa.localhost:3005` |
+| `BASE_DOMAINS` | `yourapp.in` | `localhost` |
+| `MEMBER_HOST_SUFFIX` | `-pwa` | `-pwa` |
+| `GYM_APP_URL_TEMPLATE` (member links: email sign-in, WhatsApp, reminders) | `https://{slug}-pwa.yourapp.in` | `http://{slug}-pwa.localhost:3005` |
 | `STAFF_APP_URL_TEMPLATE` (owner/staff links: password reset, invites) | `https://{slug}.yourapp.in` | `http://{slug}.localhost:3001` |
-| `CORS_ORIGINS` | `https://*.yourapp.in,https://*.pwa.yourapp.in` | as for the dev ports |
+| `CORS_ORIGINS` | `https://*.yourapp.in` | as for the dev ports |
 
-- `STAFF_BASE_DOMAINS` empty = no split: one address serves everyone (Phase 2 behaviour). With it set,
-  members are refused on staff addresses and staff on member addresses (`403 WRONG_SITE`), and each app
-  answers only on its own addresses.
-- `pwa` and `staff` are reserved subdomains (as are `www`, `admin`, …): no gym can be named after them.
-- **TLS:** `*.pwa.yourapp.in` is a second-level wildcard. Cloudflare's free Universal SSL covers only
-  `yourapp.in` and `*.yourapp.in`, so the member addresses need a certificate for `*.pwa.yourapp.in`
-  (Cloudflare Advanced Certificate Manager, a paid add-on, or Total TLS). Order it before launch.
-- DNS: a proxied wildcard record `*.pwa` (and the existing `*`) pointing at the tunnel / origin.
+- `MEMBER_HOST_SUFFIX` empty = no split: one address serves everyone (Phase 2 behaviour). With it set,
+  `<gym>-pwa.<domain>` is the member site and `<gym>.<domain>` the staff site; members are refused on
+  staff addresses and staff on member addresses (`403 WRONG_SITE`).
+- New gyms can't take a name ending in the suffix (`newgym-pwa` → reserved), and `pwa`/`staff` are
+  reserved names. Before switching it on, check no existing gym's subdomain ends in `-pwa`.
+- DNS: the existing proxied wildcard `*` covers both addresses. Route `*-pwa.yourapp.in` to the member
+  app and the rest of `*.yourapp.in` to the dashboard (Cloudflare Tunnel: a hostname rule per pattern,
+  member rule first; or one router in front that checks the `-pwa` ending).
+- Alternative, not used: separate base domains (`STAFF_BASE_DOMAINS`, e.g. members on
+  `<gym>.pwa.yourapp.in`). Works, but `*.pwa.yourapp.in` needs a paid certificate. Use one or the other.
 
 Development/e2e only: `MAIL_TRANSPORT=file` appends each email as a JSON line
 `{ at, kind, to, subject, text }` to `MAIL_FILE` (default `tmp/mail.jsonl`, relative to the backend
