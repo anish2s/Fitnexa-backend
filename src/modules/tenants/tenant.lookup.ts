@@ -11,10 +11,23 @@ function toResolved(t: LeanTenant | null): ResolvedTenant | null {
     name: t.name,
     status: t.status as ResolvedTenant['status'],
     branding: (t.branding ?? {}) as Record<string, unknown>,
+    contact: contactOf(t),
   };
 }
 
-const FIELDS = '_id slug name status branding';
+/** Public business contact: phone, street address (line 1 + line 2) and city; nulls when unset. */
+export function contactOf(
+  t: Pick<LeanTenant, 'phone' | 'address'>,
+): NonNullable<ResolvedTenant['contact']> {
+  const a = t.address ?? {};
+  const street = [a.line1, a.line2]
+    .map((v) => v?.trim())
+    .filter(Boolean)
+    .join(', ');
+  return { phone: t.phone?.trim() || null, address: street || null, city: a.city?.trim() || null };
+}
+
+const FIELDS = '_id slug name status branding phone address';
 
 /**
  * Database-backed tenant lookup. Runs on every tenant request; served by the unique indexes on

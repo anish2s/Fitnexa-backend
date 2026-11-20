@@ -98,6 +98,8 @@ export const selfUpdateBody = z
     gender: z.enum(GENDERS).nullable().optional(),
     dateOfBirth: dateOfBirth.nullable().optional(),
     emergencyContact: emergencyContact.nullable().optional(),
+    /** Visits per month the member aims for (1–31); null clears it. */
+    monthlyVisitGoal: z.number().int().min(1).max(31).nullable().optional(),
   })
   .refine((o) => Object.values(o).some((v) => v !== undefined), 'Nothing to update');
 

@@ -120,14 +120,14 @@ export function createNotificationService(deps: {
         text:
           `Hi ${name},\n\nYour ${plan} membership at ${gym.name} ends on ${prettyDate(end)}` +
           ` (${left === 1 ? 'today is the last day' : `${left} days left`}).\n\n` +
-          `Renew at the front desk or in the app so your workouts don't stop:\n${link}\n\nSee you at the gym!`,
+          `Renew at the front desk so your workouts don't stop. Your pass and plan:\n${link}\n\nSee you at the gym!`,
       };
     }
     return {
       subject: `Your ${gym.name} membership has ended`,
       text:
         `Hi ${name},\n\nYour ${plan} membership at ${gym.name} ended on ${prettyDate(end)}.\n\n` +
-        `We'd love to have you back. Renew at the front desk or in the app:\n${link}`,
+        `We'd love to have you back. Renew at the front desk. Your pass and plan:\n${link}`,
     };
   }
 

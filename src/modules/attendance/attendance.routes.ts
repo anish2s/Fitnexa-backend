@@ -12,7 +12,7 @@ import type { PassSigner } from './qr-pass.js';
 /**
  * /api/v1/attendance                 desk: scan, manual, today's list, daily report
  * /api/v1/members/:id/attendance     one member's visits (staff)
- * /api/v1/members/me/pass|attendance member app: QR pass and own visits
+ * /api/v1/members/me/pass|attendance|stats member app: QR pass, own visits, streak/month/badges
  */
 export function attendanceRouters(deps: { jwt: JwtConfig; passes: PassSigner }) {
   const svc = createAttendanceService(deps);
@@ -72,6 +72,10 @@ export function attendanceRouters(deps: { jwt: JwtConfig; passes: PassSigner }) 
   perMember.get('/me/pass', auth, authorize('self:read'), async (req: Request, res: Response) => {
     noStore(res);
     ok(res, await svc.issuePass(req.auth!.userId));
+  });
+  perMember.get('/me/stats', auth, authorize('self:read'), async (req: Request, res: Response) => {
+    noStore(res);
+    ok(res, await svc.selfStats(req.auth!.userId));
   });
   perMember.get(
     '/me/attendance',

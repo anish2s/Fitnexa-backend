@@ -59,8 +59,11 @@ export function createAuthService(deps: {
   };
 
   const sessionModel = (scope: AuthScope) => (scope.kind === 'tenant' ? Session : PlatformSession);
+  /** Member app (email-link sign-in) and staff dashboard (password reset, invites) addresses. */
   const appUrl = (tenant: ResolvedTenant, path: string) =>
     env.GYM_APP_URL_TEMPLATE.replace('{slug}', tenant.slug) + path;
+  const staffUrl = (tenant: ResolvedTenant, path: string) =>
+    (env.STAFF_APP_URL_TEMPLATE ?? env.GYM_APP_URL_TEMPLATE).replace('{slug}', tenant.slug) + path;
   const clip = (s: string | undefined, n: number) => (s ? s.slice(0, n) : undefined);
 
   /** Audit context for actions performed by the principal themselves (sign-in, reset). */
@@ -385,7 +388,7 @@ export function createAuthService(deps: {
       subject: `Reset your ${tenant.name} password`,
       text:
         `Hi ${user.name},\n\nUse this link to set a new password. It works once and expires in ` +
-        `${env.PASSWORD_RESET_TTL_MIN} minutes.\n\n${appUrl(tenant, `/reset-password?token=${token}`)}\n\n` +
+        `${env.PASSWORD_RESET_TTL_MIN} minutes.\n\n${staffUrl(tenant, `/reset-password?token=${token}`)}\n\n` +
         `If you didn't ask for this, ignore this email. Your password won't change.`,
     });
   }
@@ -416,7 +419,7 @@ export function createAuthService(deps: {
       subject: `You've been invited to ${tenant.name}`,
       text:
         `Hi ${user.name},\n\nYou've been given access to ${tenant.name}. Set your password here ` +
-        `(valid for ${env.INVITE_TTL_HOURS} hours):\n\n${appUrl(tenant, `/reset-password?token=${token}`)}`,
+        `(valid for ${env.INVITE_TTL_HOURS} hours):\n\n${staffUrl(tenant, `/reset-password?token=${token}`)}`,
     });
     // Unlike sign-in links, the inviter is told the outcome: they know the address already.
     return outcome === 'sent' ? { sent: true } : { sent: false, reason: outcome };

@@ -4,6 +4,7 @@ import { createLogger } from '../../src/lib/logger.js';
 import {
   MailSendError,
   createMailer,
+  fileMailer,
   memoryMailer,
   resendMailer,
   senderFor,
@@ -367,5 +368,59 @@ describe('mail config', () => {
       reason: 'kind_not_enabled',
     });
     expect(send).toHaveBeenCalledOnce();
+  });
+});
+
+describe('file transport (dev/e2e)', () => {
+  it('appends one JSON line per email, creating the folder', async () => {
+    const { mkdtemp, readFile } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'fx-mail-'));
+    const file = join(dir, 'nested', 'mail.jsonl');
+    const at = new Date('2026-11-20T10:00:00Z');
+    const m = fileMailer(file, () => at);
+    await expect(
+      m.send({
+        to: 'a@x.in',
+        subject: 'Sign in',
+        text: 'Link: https://x/login/verify?token=t',
+        kind: 'magic_link',
+      }),
+    ).resolves.toEqual({ status: 'sent' });
+    await m.send({ to: 'b@x.in', subject: 'Reset', text: 'r', kind: 'password_reset' });
+    const lines = (await readFile(file, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    expect(lines).toEqual([
+      {
+        at: at.toISOString(),
+        kind: 'magic_link',
+        to: 'a@x.in',
+        subject: 'Sign in',
+        text: 'Link: https://x/login/verify?token=t',
+      },
+      { at: at.toISOString(), kind: 'password_reset', to: 'b@x.in', subject: 'Reset', text: 'r' },
+    ]);
+  });
+
+  it('is chosen by MAIL_TRANSPORT=file and refused in production', () => {
+    const base = {
+      MONGODB_URI: 'mongodb://x/y',
+      BASE_DOMAINS: 'yourapp.in',
+      JWT_ACCESS_SECRET: 'x'.repeat(48),
+    };
+    expect(parseEnv({ ...base, MAIL_TRANSPORT: 'file' }).MAIL_FILE).toBe('tmp/mail.jsonl');
+    expect(() =>
+      parseEnv({
+        ...base,
+        NODE_ENV: 'production',
+        CORS_ORIGINS: 'https://*.yourapp.in',
+        GYM_APP_URL_TEMPLATE: 'https://{slug}.yourapp.in',
+        TRUST_PROXY: 'uniquelocal',
+        MAIL_TRANSPORT: 'file',
+      }),
+    ).toThrow(/MAIL_TRANSPORT/);
   });
 });

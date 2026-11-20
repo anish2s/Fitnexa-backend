@@ -43,6 +43,7 @@ type LeanMember = {
   joinDate: Date;
   emergencyContact?: { name?: string; phone?: string; relation?: string } | null;
   notes?: string | null;
+  monthlyVisitGoal?: number | null;
   photoUrl?: string | null;
   photoPublicId?: string | null;
   consent?: { at: Date; version: string } | null;
@@ -225,6 +226,7 @@ function toSelfView(m: LeanMember) {
     joinDate: formatDateOnly(m.joinDate),
     emergencyContact: emergencyView(m.emergencyContact),
     photoUrl: m.photoUrl ?? null,
+    monthlyVisitGoal: m.monthlyVisitGoal ?? null,
   };
 }
 
@@ -580,6 +582,7 @@ export function createMemberService(deps: { audit: AuditService; images: ImageSt
       gender: input.gender,
       dateOfBirth: input.dateOfBirth,
       emergencyContact: input.emergencyContact,
+      monthlyVisitGoal: input.monthlyVisitGoal,
     };
     return toSelfView(
       await applyPatch(await selfFilter(userId), picked, ctx, 'member.self_update'),

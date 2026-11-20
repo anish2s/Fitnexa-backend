@@ -2,7 +2,7 @@ import type { RequestHandler } from 'express';
 import type { Types } from 'mongoose';
 import { Errors } from '../lib/errors.js';
 import { runInTenant } from './context.js';
-import { resolveHost } from './host.js';
+import { resolveHost, siteKindOf, type SiteKind } from './host.js';
 
 /** Minimal tenant shape the request pipeline needs. */
 export interface ResolvedTenant {
@@ -11,6 +11,8 @@ export interface ResolvedTenant {
   name: string;
   status: 'active' | 'suspended' | 'archived';
   branding: Record<string, unknown>;
+  /** The gym's public business contact (shown in the member app). */
+  contact?: { phone: string | null; address: string | null; city: string | null };
 }
 
 export interface TenantLookup {
@@ -21,6 +23,8 @@ export interface TenantLookup {
 export interface ResolverOptions {
   lookup: TenantLookup;
   baseDomains: readonly string[];
+  /** STAFF_BASE_DOMAINS; empty = no staff/member split. */
+  staffBaseDomains?: readonly string[];
   reservedSubdomains: readonly string[];
   /** Dev only: honor X-Tenant-Slug. Config validation forbids this in production. */
   allowTenantHeader: boolean;
@@ -30,6 +34,8 @@ declare module 'express-serve-static-core' {
   interface Request {
     /** Set by resolveTenant(); undefined on platform hosts (yourapp.in, www, admin). */
     tenant?: ResolvedTenant;
+    /** Which app this gym request is for (set with `tenant`): member, staff, or any (no split). */
+    site?: SiteKind;
   }
 }
 
@@ -46,13 +52,22 @@ export function resolveTenant(opts: ResolverOptions): RequestHandler {
       ? req.get('x-tenant-slug')?.trim().toLowerCase()
       : undefined;
 
+    const staffBases = opts.staffBaseDomains ?? [];
     let tenant: ResolvedTenant | null = null;
+    let site: SiteKind = 'any';
     if (headerSlug) {
+      // Dev-only header: no host, so no site split.
       tenant = await opts.lookup.bySlug(headerSlug);
       if (!tenant) throw Errors.tenantNotFound();
     } else {
       // req.hostname honours X-Forwarded-Host only when "trust proxy" is configured.
-      const resolution = resolveHost(req.hostname, opts.baseDomains, opts.reservedSubdomains);
+      const resolution = resolveHost(
+        req.hostname,
+        opts.baseDomains,
+        opts.reservedSubdomains,
+        staffBases,
+      );
+      site = siteKindOf(resolution, staffBases.length > 0);
       switch (resolution.kind) {
         case 'platform':
           return next();
@@ -70,6 +85,7 @@ export function resolveTenant(opts: ResolverOptions): RequestHandler {
 
     if (tenant.status === 'archived') throw Errors.tenantNotFound();
     req.tenant = tenant;
+    req.site = site;
     // Everything downstream (including async continuations) runs inside this tenant's scope.
     await runInTenant(tenant.id, () => next());
   };

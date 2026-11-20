@@ -49,8 +49,8 @@ export function messageFor(t: Exclude<Template, 'custom'>, c: MessageContext): s
     case 'renewal':
       if (!m) return null;
       return m.ended
-        ? `${hi} your ${m.plan} membership at ${c.gymName} ended on ${prettyDate(m.endDate)}. We'd love to see you back! Renew at the front desk or in the app: ${c.appUrl}`
-        : `${hi} your ${m.plan} membership at ${c.gymName} ends on ${prettyDate(m.endDate)}. Renew at the front desk or in the app so your workouts don't stop: ${c.appUrl}`;
+        ? `${hi} your ${m.plan} membership at ${c.gymName} ended on ${prettyDate(m.endDate)}. We'd love to see you back! Renew at the front desk. Your pass and plan: ${c.appUrl}`
+        : `${hi} your ${m.plan} membership at ${c.gymName} ends on ${prettyDate(m.endDate)}. Renew at the front desk so your workouts don't stop. Your pass and plan: ${c.appUrl}`;
     case 'payment_due':
       if (!m || m.balancePaise <= 0) return null;
       return `${hi} a balance of ${rupees(m.balancePaise)} is due on your ${m.plan} membership at ${c.gymName}. You can pay at the front desk or in the app: ${c.appUrl}`;

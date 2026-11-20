@@ -16,6 +16,7 @@ import { Tenant } from '../tenants/tenant.model.js';
 import { User } from '../users/user.model.js';
 import { Attendance, type LeanAttendance } from './attendance.model.js';
 import type { DayQuery, RangeQuery } from './attendance.schemas.js';
+import { visitStats } from './visit-stats.js';
 import type { PassSigner } from './qr-pass.js';
 
 type LeanMember = {
@@ -232,6 +233,28 @@ export function createAttendanceService(deps: { passes: PassSigner }) {
     return history(await memberIdOfUser(userId), q);
   }
 
+  /**
+   * The member app's motivation figures (streak, month, week, badges) and the member's own monthly
+   * goal. One indexed read of the member's visit days; the arithmetic is in visit-stats.ts.
+   */
+  async function selfStats(userId: string) {
+    const memberId = await memberIdOfUser(userId);
+    const [{ day }, rows, member] = await Promise.all([
+      gymClock(),
+      Attendance.find({ memberId }).select('day -_id').sort({ day: 1 }).lean<{ day: string }[]>(),
+      Member.findOne({ _id: memberId })
+        .select('monthlyVisitGoal')
+        .lean<{ monthlyVisitGoal?: number | null }>(),
+    ]);
+    return {
+      ...visitStats(
+        rows.map((r) => r.day),
+        day,
+      ),
+      monthlyVisitGoal: member?.monthlyVisitGoal ?? null,
+    };
+  }
+
   /** One day: totals, QR vs manual, visits per gym-local hour, and share of active members. */
   async function report(date?: string) {
     const day = date ?? (await gymClock()).day;
@@ -272,7 +295,7 @@ export function createAttendanceService(deps: { passes: PassSigner }) {
     };
   }
 
-  return { checkIn, scan, issuePass, forDay, memberHistory, selfHistory, report };
+  return { checkIn, scan, issuePass, forDay, memberHistory, selfHistory, selfStats, report };
 }
 
 export type AttendanceService = ReturnType<typeof createAttendanceService>;

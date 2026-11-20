@@ -37,8 +37,26 @@ Production refuses a hop count (`TRUST_PROXY=1`/`2`): a count trusts whoever con
 Without a forwarded IP every visitor would share the Next.js server's single rate-limit allowance
 (300 requests/min), so a busy gym would lock everyone out: don't "fix" that by raising the limit.
 
+### Member and staff addresses (Phase 3)
+Members use the gym's main address (`https://<gym>.yourapp.in`, the member app); owners and staff use
+a separate staff address served by the dashboard. The staff domain is not decided yet, so it is a
+setting (see docs/API.md, "Member and staff addresses"):
+
+| Variable | Example | Notes |
+|---|---|---|
+| `STAFF_BASE_DOMAINS` | `staff.yourapp.in` (locally `staff.localhost`) | `<gym>.<staff base>` is the same gym's staff site. Empty = no split: the main address serves everyone (as before). Must not repeat a `BASE_DOMAINS` entry. With it set, members are refused on staff sites and staff on member sites (`403 WRONG_SITE`). |
+| `STAFF_APP_URL_TEMPLATE` | `https://{slug}.staff.yourapp.in` | Links in owner/staff emails (password reset, invites). Default: `GYM_APP_URL_TEMPLATE`. https in production. |
+| `GYM_APP_URL_TEMPLATE` | `https://{slug}.yourapp.in` | Member links: email sign-in, WhatsApp messages, renewal reminders. |
+
+Add the staff base to DNS/TLS (Cloudflare: a proxied wildcard for `*.staff.yourapp.in` needs a
+certificate covering that level) and to `CORS_ORIGINS` if a browser calls the API from it directly.
+
+Development/e2e only: `MAIL_TRANSPORT=file` appends each email as a JSON line
+`{ at, kind, to, subject, text }` to `MAIL_FILE` (default `tmp/mail.jsonl`, relative to the backend
+folder), so automated tests can read sign-in links. Production refuses it, like `log` and `memory`.
+
 ## Environment
-See `.env.example`. Production requirements enforced at startup:
+See `.env.example` and the table above. Production requirements enforced at startup:
 - `NODE_ENV=production`, `ALLOW_TENANT_HEADER=false`, `CORS_ORIGINS` set.
 - Secrets only in the host's secret store, never in git.
 - Swagger UI (`/api/docs`) is off in production; set `ENABLE_API_DOCS=true` only if you want it

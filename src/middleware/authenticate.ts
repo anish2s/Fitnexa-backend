@@ -2,10 +2,20 @@ import type { RequestHandler } from 'express';
 import { InvalidTokenError, verifyAccessToken, type JwtConfig } from '../auth/jwt.js';
 import { effectivePermissions, type Permission, type TenantRole } from '../auth/permissions.js';
 import { Errors } from '../lib/errors.js';
+import type { SiteKind } from '../tenancy/host.js';
 import { tag } from '../lib/route-meta.js';
 import { PlatformSession, Session } from '../modules/auth/session.model.js';
 import { PlatformAdmin } from '../modules/platform/platform-admin.model.js';
 import { User } from '../modules/users/user.model.js';
+
+/**
+ * Members belong to the member app, owners and staff (and "log in as owner" sessions) to the staff
+ * dashboard. With no staff address configured (`any`) everyone belongs everywhere.
+ */
+export function assertRoleOnSite(site: SiteKind | undefined, role: string): void {
+  if (site === 'member' && role !== 'member') throw Errors.wrongSite('member');
+  if (site === 'staff' && role === 'member') throw Errors.wrongSite('staff');
+}
 
 export type AuthContext =
   | {
@@ -79,6 +89,7 @@ export function authenticate(jwt: JwtConfig): RequestHandler {
             .lean(),
         ]);
         if (!session || !user) throw Errors.unauthorized();
+        assertRoleOnSite(req.site, user.role);
 
         let impersonator: { id: string; name: string } | undefined;
         const sessionImp = session.impersonatorId ? String(session.impersonatorId) : undefined;

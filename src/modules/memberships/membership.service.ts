@@ -471,19 +471,30 @@ export function createMembershipService(deps: { audit: AuditService; env?: Env }
       .limit(200)
       .lean<LeanMembership[]>();
     const summary = await membershipSummary(user.memberId, today);
+    // What each plan includes, for the member app's "Plan details" (free text, one item per line).
+    // Read from the plan itself, so an owner's later wording applies; deleted plans give null.
+    const plans = await Plan.find({
+      _id: { $in: [...new Set(rows.map((r) => String(r.plan.planId)))] },
+    })
+      .select('description')
+      .lean<{ _id: Types.ObjectId; description?: string | null }[]>();
+    const descriptions = new Map(plans.map((p) => [String(p._id), p.description?.trim() || null]));
+    const view = (m: LeanMembership) => {
+      const v = toMembershipView(m, today, { forMember: true });
+      return {
+        ...v,
+        plan: { ...v.plan, description: descriptions.get(String(m.plan.planId)) ?? null },
+      };
+    };
     return {
       summary: {
         status: summary.status,
         current: summary.current
-          ? toMembershipView(
-              rows.find((r) => String(r._id) === summary.current!.id)!,
-              today,
-              { forMember: true },
-            )
+          ? view(rows.find((r) => String(r._id) === summary.current!.id)!)
           : null,
         nextStartDate: summary.nextStartDate,
       },
-      items: rows.map((m) => toMembershipView(m, today, { forMember: true })),
+      items: rows.map(view),
     };
   }
 

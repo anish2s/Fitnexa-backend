@@ -67,8 +67,18 @@ describe('tenant resolution + public branding', () => {
 
   it('returns only whitelisted public fields', async () => {
     const res = await request(app).get('/api/v1/public/tenant').set('Host', 'powerhouse.localhost');
-    expect(Object.keys(res.body.data).sort()).toEqual(['branding', 'name', 'slug', 'status']);
+    expect(Object.keys(res.body.data).sort()).toEqual([
+      'branding',
+      'contact',
+      'name',
+      'site',
+      'slug',
+      'status',
+    ]);
     expect(res.body.data.id).toBeUndefined();
+    // No staff address configured: one site for everyone; the stub gym has no contact details.
+    expect(res.body.data.site).toBe('any');
+    expect(res.body.data.contact).toEqual({ phone: null, address: null, city: null });
   });
 
   it('resolves a verified custom domain', async () => {

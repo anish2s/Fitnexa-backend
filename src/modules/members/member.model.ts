@@ -37,6 +37,11 @@ const memberSchema = new Schema(
     },
     /** Staff-only notes; never shown to the member. */
     notes: { type: String, maxlength: 1000 },
+    /**
+     * Visits per month the member aims for, set by the member in the app (owner's decision
+     * 2026-11-20). Unset = no goal yet. Staff can see it but not change it.
+     */
+    monthlyVisitGoal: { type: Number, min: 1, max: 31 },
     photoUrl: { type: String, maxlength: 500 },
     photoPublicId: { type: String, maxlength: 200 },
     /** DPDP: when consent was recorded, which wording, and by which staff user. */

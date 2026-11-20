@@ -1,3 +1,6 @@
+import { appendFile, mkdir } from 'node:fs/promises';
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Resend } from 'resend';
 import type { Env } from '../config/env.js';
 import type { Logger } from './logger.js';
@@ -44,7 +47,8 @@ const SENT: SendResult = { status: 'sent' };
  * not go out; it throws MailSendError when the provider refuses or can't be reached. Callers decide
  * whether a failure fails the request (see safeSend in auth.service.ts).
  *
- * Transports: `log` (dev), `memory` (tests), `resend` (real delivery; owner's choice 2026-11-17).
+ * Transports: `log` (dev), `memory` (tests), `file` (dev/e2e: JSON lines), `resend` (real delivery;
+ * owner's choice 2026-11-17).
  */
 export interface Mailer {
   send(message: MailMessage): Promise<SendResult>;
@@ -188,6 +192,33 @@ export function withMailPolicy(inner: Mailer, policy: MailPolicy): Mailer {
   };
 }
 
+/** The backend folder (src/lib/ or dist/lib/ → two levels up): relative MAIL_FILE paths start here. */
+const BACKEND_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/**
+ * Development/e2e: appends each email as one JSON line `{ at, kind, to, subject, text }`, so an
+ * automated test can read the sign-in link. Production config refuses it (see env.ts).
+ */
+export function fileMailer(path: string, now: () => Date = () => new Date()): Mailer {
+  const file = isAbsolute(path) ? path : resolve(BACKEND_ROOT, path);
+  let ready: Promise<unknown> | null = null;
+  return {
+    async send(m) {
+      ready ??= mkdir(dirname(file), { recursive: true });
+      await ready;
+      const line = {
+        at: now().toISOString(),
+        kind: m.kind,
+        to: m.to,
+        subject: m.subject,
+        text: m.text,
+      };
+      await appendFile(file, `${JSON.stringify(line)}\n`, 'utf8');
+      return SENT;
+    },
+  };
+}
+
 /** The official API host, pinned: the SDK would otherwise honour a RESEND_BASE_URL env var. */
 const RESEND_API = 'https://api.resend.com';
 
@@ -210,6 +241,8 @@ export function createMailer(env: Env, logger: Logger): Mailer {
       );
     case 'memory':
       return memoryMailer();
+    case 'file':
+      return fileMailer(env.MAIL_FILE);
     default:
       return logMailer(logger);
   }

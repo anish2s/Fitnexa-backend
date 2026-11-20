@@ -1,6 +1,7 @@
 import type { CookieOptions, Request, Response } from 'express';
 import type { Env } from '../../config/env.js';
 import { Errors } from '../../lib/errors.js';
+import { assertRoleOnSite } from '../../middleware/authenticate.js';
 import { noContent, ok } from '../../lib/response.js';
 import { auditContextFrom, type AuditService } from '../audit/audit.service.js';
 import type { AuthScope, AuthService, ClientMeta, IssuedSession } from './auth.service.js';
@@ -57,14 +58,25 @@ export function createAuthController(env: Env, auth: AuthService, audit: AuditSe
     return req.tenant;
   }
 
+  /** Password sign-in, reset and invites are for owners/staff: not on the member app. */
+  const notOnMemberSite = (req: Request) => {
+    if (req.site === 'member') throw Errors.wrongSite('member');
+  };
+  /** Email-link sign-in is for members: not on the staff dashboard. */
+  const notOnStaffSite = (req: Request) => {
+    if (req.site === 'staff') throw Errors.wrongSite('staff');
+  };
+
   return {
     async login(req: Request, res: Response) {
+      notOnMemberSite(req);
       if (req.tenant) activeTenant(req);
       const { identifier, password } = req.valid.body as { identifier: string; password: string };
       sendSession(res, await auth.loginWithPassword(scopeOf(req), identifier, password, meta(req)));
     },
 
     async requestMagicLink(req: Request, res: Response) {
+      notOnStaffSite(req);
       const tenant = activeTenant(req);
       const { email } = req.valid.body as { email: string };
       await auth.requestMagicLink(tenant, email, meta(req));
@@ -76,12 +88,14 @@ export function createAuthController(env: Env, auth: AuthService, audit: AuditSe
     },
 
     async verifyMagicLink(req: Request, res: Response) {
+      notOnStaffSite(req);
       const tenant = activeTenant(req);
       const { token } = req.valid.body as { token: string };
       sendSession(res, await auth.verifyMagicLink(tenant, token, meta(req)));
     },
 
     async forgotPassword(req: Request, res: Response) {
+      notOnMemberSite(req);
       const tenant = activeTenant(req);
       const { email } = req.valid.body as { email: string };
       await auth.requestPasswordReset(tenant, email, meta(req));
@@ -93,6 +107,7 @@ export function createAuthController(env: Env, auth: AuthService, audit: AuditSe
     },
 
     async resetPassword(req: Request, res: Response) {
+      notOnMemberSite(req);
       const tenant = activeTenant(req);
       const { token, password } = req.valid.body as { token: string; password: string };
       await auth.resetPassword(tenant, token, password, meta(req));
@@ -103,6 +118,11 @@ export function createAuthController(env: Env, auth: AuthService, audit: AuditSe
       if (req.tenant) activeTenant(req);
       const token = readRefreshCookie(req);
       if (!token) throw Errors.invalidRefresh();
+      if (req.site === 'member' || req.site === 'staff') {
+        // Checked before rotating, so a session from the other app is left untouched.
+        const found = await auth.sessionRole(scopeOf(req), token);
+        if (found) assertRoleOnSite(req.site, found.role);
+      }
       try {
         sendSession(res, await auth.refresh(scopeOf(req), token, meta(req)));
       } catch (err) {
@@ -117,6 +137,7 @@ export function createAuthController(env: Env, auth: AuthService, audit: AuditSe
       const token = readRefreshCookie(req);
       const found = token ? await auth.sessionRole(scopeOf(req), token) : null;
       if (!found) throw Errors.invalidRefresh();
+      assertRoleOnSite(req.site, found.role);
       res.set('Cache-Control', 'no-store');
       ok(res, found);
     },

@@ -78,3 +78,49 @@ describe('parseEnv', () => {
     expect(() => parseEnv(prod)).toThrow(/GYM_APP_URL_TEMPLATE/);
   });
 });
+
+describe('staff address settings', () => {
+  const base = {
+    MONGODB_URI: 'mongodb://x/y',
+    BASE_DOMAINS: 'yourapp.in, localhost',
+    JWT_ACCESS_SECRET: 'x'.repeat(48),
+  };
+
+  it('are optional: no staff bases, staff links use the gym template', () => {
+    const env = parseEnv(base);
+    expect(env.STAFF_BASE_DOMAINS).toEqual([]);
+    expect(env.STAFF_APP_URL_TEMPLATE).toBeUndefined();
+  });
+
+  it('staff bases must not repeat gym bases; the staff template needs {slug}', () => {
+    expect(parseEnv({ ...base, STAFF_BASE_DOMAINS: 'staff.localhost' }).STAFF_BASE_DOMAINS).toEqual(
+      ['staff.localhost'],
+    );
+    expect(() => parseEnv({ ...base, STAFF_BASE_DOMAINS: 'staff.localhost, LocalHost' })).toThrow(
+      /STAFF_BASE_DOMAINS/,
+    );
+    expect(() => parseEnv({ ...base, STAFF_APP_URL_TEMPLATE: 'https://staff.yourapp.in' })).toThrow(
+      /\{slug\}/,
+    );
+  });
+
+  it('production needs an https staff template', () => {
+    const prod = {
+      ...base,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://*.yourapp.in',
+      GYM_APP_URL_TEMPLATE: 'https://{slug}.yourapp.in',
+      MAIL_TRANSPORT: 'resend',
+      RESEND_API_KEY: 're_test_12345678',
+      MAIL_FROM: 'Gym <no-reply@yourapp.in>',
+      TRUST_PROXY: 'uniquelocal',
+    };
+    expect(() =>
+      parseEnv({ ...prod, STAFF_APP_URL_TEMPLATE: 'http://{slug}.staff.yourapp.in' }),
+    ).toThrow(/STAFF_APP_URL_TEMPLATE/);
+    expect(
+      parseEnv({ ...prod, STAFF_APP_URL_TEMPLATE: 'https://{slug}.staff.yourapp.in' })
+        .STAFF_APP_URL_TEMPLATE,
+    ).toBe('https://{slug}.staff.yourapp.in');
+  });
+});

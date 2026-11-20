@@ -68,6 +68,18 @@ export const Errors = {
     new AppError(400, 'TENANT_REQUIRED', 'This endpoint must be called on a gym domain'),
   tenantSuspended: () =>
     new AppError(403, 'TENANT_SUSPENDED', 'This gym account is suspended. Contact support.'),
+  /**
+   * Members and staff use different addresses (Phase 3): a member on the staff dashboard, or
+   * staff on the member app. `site` says which app the request reached.
+   */
+  wrongSite: (site: 'member' | 'staff') =>
+    new AppError(
+      403,
+      'WRONG_SITE',
+      site === 'member'
+        ? 'Staff sign in on the staff dashboard.'
+        : "Members sign in on the gym's member app.",
+    ),
 
   // --- authentication ---
   /** Same response for unknown user and wrong password: no account enumeration. */

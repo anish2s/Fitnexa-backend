@@ -26,6 +26,8 @@ export function publicTenantRouter() {
       name: t.name,
       slug: t.slug,
       status: t.status === 'active' ? 'active' : 'suspended',
+      /** Which app this address is for: member, staff, or any (no separate staff address). */
+      site: req.site ?? 'any',
       branding: {
         logoUrl: b.logoUrl ?? null,
         appIconUrl: b.appIconUrl ?? null,
@@ -37,6 +39,8 @@ export function publicTenantRouter() {
         /** Changes whenever branding does; clients use it to version icon URLs. */
         updatedAt: b.updatedAt ?? null,
       },
+      /** Business contact only (signed-out safe): the member app shows the gym's area and phone. */
+      contact: t.contact ?? { phone: null, address: null, city: null },
     });
   });
 

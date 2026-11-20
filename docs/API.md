@@ -29,6 +29,7 @@ Every response carries `X-Request-Id`.
 | 401 | `INVALID_CREDENTIALS` | wrong password **or** unknown account (indistinguishable) |
 | 401 | `INVALID_REFRESH`, `REFRESH_RACE` | refresh cookie dead (sign in again) / another tab refreshed first (retry) |
 | 403 | `FORBIDDEN`, `TENANT_SUSPENDED`, `ACCOUNT_DISABLED`, `CROSS_ORIGIN_REJECTED` | |
+| 403 | `WRONG_SITE` | staff on the member app's address or a member on the staff dashboard's (only when `STAFF_BASE_DOMAINS` is set; see "Member and staff addresses") |
 | 404 | `NOT_FOUND`, `ROUTE_NOT_FOUND`, `TENANT_NOT_FOUND` | unknown and archived gyms are indistinguishable |
 | 409 | `CONFLICT`, `DUPLICATE` | duplicate values are never echoed back |
 | 413 | `PAYLOAD_TOO_LARGE` | body > 100 kb |
@@ -61,6 +62,7 @@ Called by the dashboard and PWA before login. Gym host required.
     "name": "Powerhouse Fitness",
     "slug": "powerhouse",
     "status": "active",
+    "site": "member",
     "branding": {
       "logoUrl": "https://…",
       "appIconUrl": null,
@@ -69,13 +71,37 @@ Called by the dashboard and PWA before login. Gym host required.
       "secondaryColor": "#0F172A",
       "defaultTheme": "dark",
       "updatedAt": "2026-11-19T10:00:00.000Z"
-    }
+    },
+    "contact": { "phone": "+919800000001", "address": "2nd floor, MG Road, Camp", "city": "Pune" }
   }
 }
 ```
+`site` is `member`, `staff` or `any` (see "Member and staff addresses"). `contact` is the gym's own
+business phone and address (`address` = line 1 and line 2 joined with ", "; each `null` when unset);
+nothing else about the gym is public.
 `status` is `active` or `suspended` (suspended gyms still show branding so the login page can explain).
 `branding.updatedAt` is the last branding change (`null` until the first); clients version icon and
 logo URLs with it so a change shows at once. Cached for 60 s.
+
+## Member and staff addresses (Phase 3)
+
+Members use the gym's main address (`powerhouse.yourapp.in`, the member app); owners and staff use a
+separate staff address (`powerhouse.<staff base>`, the dashboard). Configure with `STAFF_BASE_DOMAINS`
+(e.g. `staff.yourapp.in`; locally `staff.localhost`). The longest matching base domain wins, so
+`powerhouse.staff.localhost` is the staff site of the gym `powerhouse`. Each gym request has a site:
+
+| Site | When | Allowed |
+|---|---|---|
+| `member` | under `BASE_DOMAINS` (or a custom domain) while `STAFF_BASE_DOMAINS` is set | member sessions; `POST /auth/magic-link`, `/magic-link/verify` |
+| `staff` | under `STAFF_BASE_DOMAINS` | owner/staff sessions (incl. "log in as owner"); `POST /auth/login`, `/password/forgot`, `/password/reset` |
+| `any` | `STAFF_BASE_DOMAINS` empty | everything (the behaviour before Phase 3) |
+
+Anything else answers `403 WRONG_SITE` ("Staff sign in on the staff dashboard." on a member site,
+"Members sign in on the gym's member app." on a staff site): the sign-in endpoints above, any request
+with a token of the other kind, `POST /auth/refresh` (checked before the token is rotated, so the
+session is untouched) and `GET /auth/session`. Owner/staff emails (password reset, invites) link to
+`STAFF_APP_URL_TEMPLATE` (default `GYM_APP_URL_TEMPLATE`); member links (sign-in, WhatsApp, renewal
+reminders) to `GYM_APP_URL_TEMPLATE`.
 
 ## Authentication — `/api/v1/auth`
 
@@ -213,7 +239,7 @@ same gym with the same email (`409 DUPLICATE`).
 | `POST /members/:id/archive` | `members:archive` | — | member detail; ends their app sessions |
 | `POST /members/:id/restore` | `members:archive` | — | member detail |
 | `GET /members/me` | `self:read` (members) | — | own profile (no staff notes) |
-| `PATCH /members/me` | `self:update` (members) | any of `gender, dateOfBirth, emergencyContact` | own profile |
+| `PATCH /members/me` | `self:update` (members) | any of `gender, dateOfBirth, emergencyContact, monthlyVisitGoal` (integer 1–31; `null` clears) | own profile |
 
 - **Membership column.** Each list row has the member's current membership, picked like the
   profile (active, else the next upcoming, else the latest; cancelled ones ignored):
@@ -264,7 +290,8 @@ report in `error.details` and writes nothing. A clean real import returns `201`.
 `consentConfirmed=true` → `422`. Bad file (empty, no `name`/`phone` column, too many rows) → `400`.
 
 Member detail: `{ id, memberCode, name, phone, email, gender, dateOfBirth, joinDate,
-emergencyContact, photoUrl, notes, consent{ at, version }, appAccess, archivedAt, createdAt, updatedAt }`.
+emergencyContact, photoUrl, monthlyVisitGoal, notes, consent{ at, version }, appAccess, archivedAt, createdAt, updatedAt }`.
+`monthlyVisitGoal` (1–31 or `null`) is set by the member in the app; staff can see it but not change it.
 
 ## Plans — `/api/v1/plans` (gym host)
 
@@ -300,7 +327,7 @@ Reading needs `memberships:read`, selling/renewing/cancelling `memberships:manag
 | `POST /memberships/:id/cancel` | `{ reason }` | membership. Only active/upcoming; `409` otherwise. |
 | `GET /memberships` | `?status=active|upcoming|expired|cancelled&planId&page&limit` | memberships with `member{ id, memberCode, name, phone, photoUrl, archived }`, soonest end first |
 | `GET /memberships/expiring` | `?days&page&limit` | active memberships ending within `days` (default: gym's `renewalReminderDays`), whose member hasn't renewed and isn't archived. `meta.until`. |
-| `GET /members/me/memberships` | `self:read` (member) | own `{ summary, items[] }`, without notes/staff fields |
+| `GET /members/me/memberships` | `self:read` (member) | own `{ summary, items[] }`, without notes/staff fields; each `plan` also has `description` (the plan's current free text, one item per line, or `null`) |
 
 Membership: `{ id, memberId, plan{ id, name, duration, months, pricePaise, taxMode, gstRate }, discountPaise,
 basePaise, gstPaise, totalPaise, startDate, endDate, kind: new|renewal, status, daysLeft, cancelledAt,
@@ -415,6 +442,7 @@ Checkout params: `{ keyId, orderId, amountPaise, currency: "INR", name, descript
 | `GET /attendance/report` | `attendance:read` | `?date` | `{ date, total, byMethod{ qr, manual }, byHour[24]{ hour, count }, busiestHour, activeMembers, attendanceRate }` |
 | `GET /members/:id/attendance` | `attendance:read` | `?from&to&page&limit` | that member's visits, newest first |
 | `GET /members/me/attendance` | member (`self:read`) | same | own visits |
+| `GET /members/me/stats` | member (`self:read`) | — | `{ today, lifetimeVisits, thisMonth, thisWeek, week: boolean[7], checkedInToday, currentStreak, bestStreak, monthlyVisitGoal, badges: [{ visits: 1\|10\|25\|50\|100, earnedOn }] }` |
 
 Check-in result: `201 { status: "checked_in", … }` or `200 { status: "already_checked_in", … }`, with
 `checkIn{ id, day, checkedInAt, method }`, `member{ id, name, memberCode, phone, photoUrl }` and

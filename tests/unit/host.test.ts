@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeHost, resolveHost } from '../../src/tenancy/host.js';
+import { normalizeHost, resolveHost, siteKindOf } from '../../src/tenancy/host.js';
 
 const BASES = ['yourapp.in', 'localhost'];
 const RESERVED = ['www', 'api', 'admin', 'app'];
@@ -7,15 +7,27 @@ const r = (h: string | undefined) => resolveHost(h, BASES, RESERVED);
 
 describe('resolveHost', () => {
   it('resolves a gym subdomain on the production domain', () => {
-    expect(r('powerhouse.yourapp.in')).toEqual({ kind: 'subdomain', slug: 'powerhouse' });
+    expect(r('powerhouse.yourapp.in')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'gym',
+    });
   });
 
   it('resolves local development subdomains with a port', () => {
-    expect(r('fitzone.localhost:4000')).toEqual({ kind: 'subdomain', slug: 'fitzone' });
+    expect(r('fitzone.localhost:4000')).toEqual({
+      kind: 'subdomain',
+      slug: 'fitzone',
+      base: 'gym',
+    });
   });
 
   it('is case-insensitive and tolerates a trailing dot', () => {
-    expect(r('PowerHouse.YourApp.IN.')).toEqual({ kind: 'subdomain', slug: 'powerhouse' });
+    expect(r('PowerHouse.YourApp.IN.')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'gym',
+    });
   });
 
   it('treats the bare domain, reserved subdomains and IPs as the platform', () => {
@@ -62,5 +74,41 @@ describe('resolveHost', () => {
 describe('normalizeHost', () => {
   it('strips port and lowercases', () => {
     expect(normalizeHost('Gym.Localhost:3000')).toBe('gym.localhost');
+  });
+});
+
+describe('staff addresses (STAFF_BASE_DOMAINS)', () => {
+  const STAFF = ['staff.localhost', 'staff.yourapp.in'];
+  const rs = (h: string) => resolveHost(h, BASES, RESERVED, STAFF);
+
+  it('the longest matching base wins: <slug>.staff.<base> is the staff site of that gym', () => {
+    expect(rs('powerhouse.staff.localhost:3001')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'staff',
+    });
+    expect(rs('powerhouse.staff.yourapp.in')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'staff',
+    });
+    expect(rs('powerhouse.localhost')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'gym',
+    });
+  });
+
+  it('the bare staff base and reserved names are the platform; deeper names are invalid', () => {
+    expect(rs('staff.localhost')).toEqual({ kind: 'platform' });
+    expect(rs('admin.staff.yourapp.in')).toEqual({ kind: 'platform' });
+    expect(rs('a.powerhouse.staff.localhost')).toEqual({ kind: 'invalid' });
+  });
+
+  it('site kinds: split only when staff bases are configured; custom domains are member sites', () => {
+    expect(siteKindOf(rs('powerhouse.staff.localhost'), true)).toBe('staff');
+    expect(siteKindOf(rs('powerhouse.localhost'), true)).toBe('member');
+    expect(siteKindOf(rs('app.powerhousegym.in'), true)).toBe('member');
+    expect(siteKindOf(r('powerhouse.localhost'), false)).toBe('any');
   });
 });

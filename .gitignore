@@ -7,3 +7,6 @@ coverage/
 *.log
 .DS_Store
 .vitest/
+
+# MAIL_TRANSPORT=file output (dev/e2e)
+tmp/

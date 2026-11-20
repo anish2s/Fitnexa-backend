@@ -75,6 +75,13 @@ export const envSchema = z
 
     /** Root domains the platform serves tenants under, e.g. "yourapp.in,localhost". */
     BASE_DOMAINS: csv.pipe(z.array(z.string()).min(1, 'BASE_DOMAINS needs at least one domain')),
+    /**
+     * Root domains of the STAFF dashboard, e.g. "staff.localhost" (owner's decision 2026-11-20:
+     * members use the gym's main address, staff a separate one; the production domain is decided
+     * later). `<slug>.<staff base>` is the same gym as `<slug>.<base>`. Empty = no split: the main
+     * address serves staff and members alike (the behaviour before Phase 3).
+     */
+    STAFF_BASE_DOMAINS: csv,
     /** Subdomains that never resolve to a gym (platform/admin surfaces). */
     RESERVED_SUBDOMAINS: z
       .string()
@@ -127,10 +134,26 @@ export const envSchema = z
       .string()
       .default('http://{slug}.localhost:3000')
       .refine((v) => v.includes('{slug}'), 'GYM_APP_URL_TEMPLATE must contain {slug}'),
+    /**
+     * Staff dashboard URL for owner/staff emails (password reset, invites), e.g.
+     * https://{slug}.staff.yourapp.in. Defaults to GYM_APP_URL_TEMPLATE (no separate staff address).
+     */
+    STAFF_APP_URL_TEMPLATE: z
+      .string()
+      .optional()
+      .refine(
+        (v) => v === undefined || v.includes('{slug}'),
+        'STAFF_APP_URL_TEMPLATE must contain {slug}',
+      ),
 
     // --- Email ---
-    /** log: writes emails to the log (dev only). memory: kept in memory (tests). resend: real. */
-    MAIL_TRANSPORT: z.enum(['log', 'memory', 'resend']).default('log'),
+    /**
+     * log: writes emails to the log (dev only). memory: kept in memory (tests). file: appends each
+     * email as a JSON line to MAIL_FILE (dev/e2e only, so tests can read sign-in links). resend: real.
+     */
+    MAIL_TRANSPORT: z.enum(['log', 'memory', 'file', 'resend']).default('log'),
+    /** For MAIL_TRANSPORT=file: path of the JSON-lines file, relative to the backend folder. */
+    MAIL_FILE: z.string().trim().min(1).default('tmp/mail.jsonl'),
     /** Must be an address on a domain verified in the provider, e.g. `Fitexaa <no-reply@yourapp.in>`.
      * Gym mail keeps the address but shows the gym's name as the sender (see senderFor). */
     MAIL_FROM: z.string().trim().min(3).default('Fitexaa <no-reply@localhost>'),
@@ -243,7 +266,7 @@ export const envSchema = z
         message: 'COOKIE_SECURE must be true in production',
       });
     }
-    if (env.NODE_ENV === 'production' && ['log', 'memory'].includes(env.MAIL_TRANSPORT)) {
+    if (env.NODE_ENV === 'production' && ['log', 'memory', 'file'].includes(env.MAIL_TRANSPORT)) {
       ctx.addIssue({
         code: 'custom',
         path: ['MAIL_TRANSPORT'],
@@ -307,6 +330,28 @@ export const envSchema = z
         path: ['GYM_APP_URL_TEMPLATE'],
         message: 'GYM_APP_URL_TEMPLATE must use https in production',
       });
+    }
+    if (
+      env.NODE_ENV === 'production' &&
+      env.STAFF_APP_URL_TEMPLATE !== undefined &&
+      !env.STAFF_APP_URL_TEMPLATE.startsWith('https://')
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['STAFF_APP_URL_TEMPLATE'],
+        message: 'STAFF_APP_URL_TEMPLATE must use https in production',
+      });
+    }
+    {
+      // A staff base must not equal a gym base (the same host would be both sites).
+      const overlap = env.STAFF_BASE_DOMAINS.filter((d) => env.BASE_DOMAINS.includes(d));
+      if (overlap.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['STAFF_BASE_DOMAINS'],
+          message: `STAFF_BASE_DOMAINS must not repeat BASE_DOMAINS: ${overlap.join(', ')}`,
+        });
+      }
     }
     if (env.NODE_ENV === 'production' && env.ALLOW_TENANT_HEADER) {
       ctx.addIssue({

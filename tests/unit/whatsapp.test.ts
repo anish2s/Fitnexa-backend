@@ -24,7 +24,7 @@ describe('WhatsApp links', () => {
       membership: { plan: 'Monthly', endDate: '2026-11-21', ended: false, balancePaise: 100000 },
     };
     expect(messageFor('renewal', c)).toBe(
-      "Hi Arjun, your Monthly membership at Powerhouse Fitness ends on 21 Nov 2026. Renew at the front desk or in the app so your workouts don't stop: https://powerhouse.yourapp.in",
+      "Hi Arjun, your Monthly membership at Powerhouse Fitness ends on 21 Nov 2026. Renew at the front desk so your workouts don't stop. Your pass and plan: https://powerhouse.yourapp.in",
     );
     expect(messageFor('renewal', { ...c, membership: { ...c.membership, ended: true } })).toContain(
       'ended on 21 Nov 2026',

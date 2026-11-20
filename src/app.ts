@@ -162,6 +162,7 @@ export function createApp(deps: AppDeps) {
     resolveTenant({
       lookup: deps.tenantLookup,
       baseDomains: env.BASE_DOMAINS,
+      staffBaseDomains: env.STAFF_BASE_DOMAINS,
       reservedSubdomains: env.RESERVED_SUBDOMAINS,
       allowTenantHeader: env.ALLOW_TENANT_HEADER,
     }),
