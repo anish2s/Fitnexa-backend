@@ -64,6 +64,7 @@ Called by the dashboard and PWA before login. Gym host required.
     "branding": {
       "logoUrl": "https://…",
       "appIconUrl": null,
+      "coverImageUrl": null,
       "primaryColor": "#E11D48",
       "secondaryColor": "#0F172A",
       "defaultTheme": "dark",
@@ -149,7 +150,7 @@ Always the host's gym; the body can't name another one.
 |---|---|---|---|
 | `GET /gym` | `gym:read` (owner, staff) | — | gym view (below) |
 | `PATCH /gym` | `gym:update` (owner) | any of `name, email, phone, address{…}, settings{timezone, gstin, receiptPrefix, renewalReminderDays, renewalRemindersEnabled}` | gym view |
-| `PATCH /gym/branding` | `branding:update` (owner) | any of `logoUrl` (https), `appIconUrl` (an upload of ours, see below), `primaryColor, secondaryColor` (`#RRGGBB`), `defaultTheme` (`dark`/`light`/`system`) | gym view (`branding.updatedAt` bumped) |
+| `PATCH /gym/branding` | `branding:update` (owner) | any of `logoUrl` (https), `appIconUrl`, `coverImageUrl` (uploads of ours, see below), `primaryColor, secondaryColor` (`#RRGGBB`), `defaultTheme` (`dark`/`light`/`system`) | gym view (`branding.updatedAt` bumped) |
 
 Patches merge: sending `settings.timezone` leaves the other settings alone. `null` clears an optional
 field. An empty body is `422`.
@@ -512,14 +513,14 @@ a new registration. `privacy:manage` can't be granted to staff.
 Images go straight from the browser to Cloudinary; the API only signs the upload.
 
 1. `POST /uploads/signature` with `{ purpose: "member_photo", memberId }` (`members:update`) or
-   `{ purpose: "gym_logo" | "gym_icon" }` (`branding:update`). Response:
+   `{ purpose: "gym_logo" | "gym_icon" | "gym_cover" }` (`branding:update`). Response:
    `{ uploadUrl, fields{ api_key, timestamp, public_id, allowed_formats, overwrite, signature }, publicId, deliveryUrl, expiresAt }`.
 2. Browser: `POST uploadUrl` as `multipart/form-data` with every entry of `fields` plus `file`.
    Formats: jpg, jpeg, png, webp. The signature is valid for one hour.
 3. Confirm:
    - member photo: `PUT /members/:id/photo { publicId }` → member detail with `photoUrl`;
      `DELETE /members/:id/photo` removes it. Replacing or removing deletes the old image from Cloudinary.
-   - logo / icon: `PATCH /gym/branding { logoUrl | appIconUrl: deliveryUrl }` (super admin:
+   - logo / icon / cover: `PATCH /gym/branding { logoUrl | appIconUrl | coverImageUrl: deliveryUrl }` (super admin:
      `PATCH /platform/tenants/:id/branding`).
 
 `publicId` must be one the API could have issued for that member in this gym, otherwise `422`.
@@ -530,6 +531,13 @@ upload for **this** gym, and the file Cloudinary actually stored (looked up with
 the browser's word) must be **PNG, JPG or WebP, ≤ 2 MB and square**; otherwise `422` on `appIconUrl`.
 SVG is refused at upload already (`allowed_formats`) and again here. Replacing or clearing the icon
 deletes the old file. Any branding change sets `branding.updatedAt`.
+
+**Cover image** (`coverImageUrl`, the photo in the member app's Home hero; `null` = the app draws a
+pattern in the gym colour): same rules as the icon (owners and super admins only, a `deliveryUrl`
+from a `gym_cover` upload for **this** gym, checked against Cloudinary's record), but **PNG, JPG or
+WebP, ≤ 5 MB, any shape**; otherwise `422` on `coverImageUrl`. Delivered at most 1920 px on its long
+side (`c_limit`), in proportion; the app crops it to fit. Public (`GET /public/tenant`), like the logo.
+Replacing or clearing it deletes the old file.
 Without Cloudinary credentials these endpoints answer `503 UPLOADS_NOT_CONFIGURED`.
 
 ## Super admin console — `/api/v1/platform` (platform host, super admin only)
@@ -542,7 +550,7 @@ Without Cloudinary credentials these endpoints answer `503 UPLOADS_NOT_CONFIGURE
 | `GET /platform/tenants/:id` | — | `{ tenant, appUrl, owners[], userCounts{ owner, staff, member } }` |
 | `PATCH /platform/tenants/:id` | gym profile fields + `subscription{…}` | gym view |
 | `PATCH /platform/tenants/:id/branding` | branding fields (same app icon rules as the owner's) | gym view |
-| `POST /platform/tenants/:id/uploads/signature` | `{ purpose: "gym_logo" \| "gym_icon" }` | signed upload into that gym's branding folder (as `/uploads/signature`) |
+| `POST /platform/tenants/:id/uploads/signature` | `{ purpose: "gym_logo" \| "gym_icon" \| "gym_cover" }` | signed upload into that gym's branding folder (as `/uploads/signature`) |
 | `POST /platform/tenants/:id/suspend` | `{ reason }` (3–500 chars) | gym view. The gym's next request gets `403 TENANT_SUSPENDED`; sessions are kept. |
 | `POST /platform/tenants/:id/activate` | — | gym view. `409` if not suspended. |
 | `POST /platform/tenants/:id/owner-invite` | — | `202 { sent, ownerId, reason: null|throttled|send_failed|kind_not_enabled|recipient_not_allowed }`. `409` if no owner is waiting. |

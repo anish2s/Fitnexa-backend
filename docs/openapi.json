@@ -1563,6 +1563,18 @@
                       }
                     ]
                   },
+                  "coverImageUrl": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500,
+                        "format": "uri"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "primaryColor": {
                     "type": "string",
                     "pattern": "^#[0-9a-fA-F]{6}$"
@@ -5975,6 +5987,18 @@
                           }
                         ]
                       },
+                      "coverImageUrl": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500,
+                            "format": "uri"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "primaryColor": {
                         "type": "string",
                         "pattern": "^#[0-9a-fA-F]{6}$"
@@ -6629,6 +6653,18 @@
                       }
                     ]
                   },
+                  "coverImageUrl": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500,
+                        "format": "uri"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "primaryColor": {
                     "type": "string",
                     "pattern": "^#[0-9a-fA-F]{6}$"
@@ -6937,7 +6973,8 @@
                     "type": "string",
                     "enum": [
                       "gym_logo",
-                      "gym_icon"
+                      "gym_icon",
+                      "gym_cover"
                     ]
                   }
                 },
@@ -8061,6 +8098,18 @@
                       "purpose": {
                         "type": "string",
                         "const": "gym_icon"
+                      }
+                    },
+                    "required": [
+                      "purpose"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "purpose": {
+                        "type": "string",
+                        "const": "gym_cover"
                       }
                     },
                     "required": [

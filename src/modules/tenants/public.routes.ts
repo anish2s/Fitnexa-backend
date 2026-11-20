@@ -14,6 +14,7 @@ export function publicTenantRouter() {
     const b = t.branding as {
       logoUrl?: string;
       appIconUrl?: string;
+      coverImageUrl?: string;
       primaryColor?: string;
       secondaryColor?: string;
       defaultTheme?: string;
@@ -28,6 +29,8 @@ export function publicTenantRouter() {
       branding: {
         logoUrl: b.logoUrl ?? null,
         appIconUrl: b.appIconUrl ?? null,
+        /** Member-app hero photo; null = the app draws a pattern in the gym colour. */
+        coverImageUrl: b.coverImageUrl ?? null,
         primaryColor: b.primaryColor ?? '#7C3AED',
         secondaryColor: b.secondaryColor ?? '#0F172A',
         defaultTheme: b.defaultTheme ?? 'dark',

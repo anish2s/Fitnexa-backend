@@ -2,7 +2,7 @@ import { Router, type RequestHandler } from 'express';
 import type { Permission } from '../../auth/permissions.js';
 import type { JwtConfig } from '../../auth/jwt.js';
 import { Errors } from '../../lib/errors.js';
-import { randomImageName, type ImageStore } from '../../lib/image-store.js';
+import { BRANDING_KIND, randomImageName, type ImageStore } from '../../lib/image-store.js';
 import { ok } from '../../lib/response.js';
 import { authenticate, authorize } from '../../middleware/authenticate.js';
 import { validate } from '../../middleware/validate.js';
@@ -13,6 +13,7 @@ import { signatureBody, type SignatureInput } from './upload.schemas.js';
 const PERMISSION: Record<SignatureInput['purpose'], Permission> = {
   gym_logo: 'branding:update',
   gym_icon: 'branding:update',
+  gym_cover: 'branding:update',
   member_photo: 'members:update',
 };
 
@@ -51,7 +52,7 @@ export function uploadRouter(deps: { jwt: JwtConfig; images: ImageStore | null }
           images.signUpload(`${prefix}/members/${body.memberId}/${name}`, 'member_photo'),
         );
       }
-      const kind = body.purpose === 'gym_logo' ? 'logo' : 'icon';
+      const kind = BRANDING_KIND[body.purpose];
       ok(res, images.signUpload(`${prefix}/branding/${kind}-${name}`, kind));
     },
   );

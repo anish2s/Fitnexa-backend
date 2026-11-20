@@ -44,9 +44,16 @@ export interface StoredImage {
   height: number;
 }
 
-export type ImageKind = 'logo' | 'icon' | 'member_photo';
+export type ImageKind = 'logo' | 'icon' | 'cover' | 'member_photo';
 
 export const ALLOWED_FORMATS = 'jpg,jpeg,png,webp';
+
+/** Gym branding uploads: signature purpose → image kind (also the file-name prefix in the gym's folder). */
+export const BRANDING_KIND = {
+  gym_logo: 'logo',
+  gym_icon: 'icon',
+  gym_cover: 'cover',
+} as const satisfies Record<string, ImageKind>;
 
 /** Cloudinary's public API: browsers upload here, and the server calls it unless tests say otherwise. */
 export const CLOUDINARY_API_URL = 'https://api.cloudinary.com';
@@ -55,6 +62,8 @@ export const CLOUDINARY_API_URL = 'https://api.cloudinary.com';
 const DELIVERY: Record<ImageKind, string> = {
   logo: 'c_limit,w_512,h_512,f_auto,q_auto',
   icon: 'c_fill,w_512,h_512,f_auto,q_auto',
+  /** Member-app hero photo: kept in proportion, at most 1920 px, the browser crops it to fit. */
+  cover: 'c_limit,w_1920,h_1920,f_auto,q_auto',
   member_photo: 'c_fill,g_face,w_400,h_400,f_auto,q_auto',
 };
 

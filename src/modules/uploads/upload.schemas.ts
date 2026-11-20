@@ -4,6 +4,7 @@ import { objectId } from '../../lib/pagination.js';
 export const signatureBody = z.discriminatedUnion('purpose', [
   z.object({ purpose: z.literal('gym_logo') }),
   z.object({ purpose: z.literal('gym_icon') }),
+  z.object({ purpose: z.literal('gym_cover') }),
   z.object({ purpose: z.literal('member_photo'), memberId: objectId }),
 ]);
 export type SignatureInput = z.infer<typeof signatureBody>;

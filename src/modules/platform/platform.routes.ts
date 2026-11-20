@@ -7,7 +7,7 @@ import type { AuditService } from '../audit/audit.service.js';
 import { createPlatformController } from './platform.controller.js';
 import * as s from './platform.schemas.js';
 import type { PlatformService } from './platform.service.js';
-import { randomImageName, type ImageStore } from '../../lib/image-store.js';
+import { BRANDING_KIND, randomImageName, type ImageStore } from '../../lib/image-store.js';
 import { Errors } from '../../lib/errors.js';
 import { ok } from '../../lib/response.js';
 
@@ -41,8 +41,8 @@ export function platformRouter(deps: {
     validate({ params: s.tenantIdParams, body: s.platformBrandingPatch }),
     c.updateBranding,
   );
-  // Signs a logo/icon upload into THAT gym's branding folder; the URL is then saved with
-  // PATCH /tenants/:id/branding, which verifies the stored file (format, size, square icon).
+  // Signs a logo/icon/cover upload into THAT gym's branding folder; the URL is then saved with
+  // PATCH /tenants/:id/branding, which verifies the stored file (format, size; square icon).
   router.post(
     '/tenants/:id/uploads/signature',
     validate({ params: s.tenantIdParams, body: s.brandingSignatureBody }),
@@ -51,8 +51,8 @@ export function platformRouter(deps: {
       if (!images) throw Errors.uploadsNotConfigured();
       const { id } = req.valid.params as { id: string };
       await deps.platform.ensureExists(id);
-      const { purpose } = req.valid.body as { purpose: 'gym_logo' | 'gym_icon' };
-      const kind = purpose === 'gym_logo' ? 'logo' : 'icon';
+      const { purpose } = req.valid.body as { purpose: keyof typeof BRANDING_KIND };
+      const kind = BRANDING_KIND[purpose];
       ok(
         res,
         images.signUpload(`${images.gymPrefix(id)}/branding/${kind}-${randomImageName()}`, kind),

@@ -44,6 +44,7 @@ export function toTenantView(t: LeanTenant) {
     branding: {
       logoUrl: b.logoUrl ?? null,
       appIconUrl: b.appIconUrl ?? null,
+      coverImageUrl: b.coverImageUrl ?? null,
       primaryColor: b.primaryColor ?? '#7C3AED',
       secondaryColor: b.secondaryColor ?? '#0F172A',
       defaultTheme: b.defaultTheme ?? 'dark',

@@ -68,7 +68,9 @@ export const suspendBody = z.object({
 });
 
 /** A branding image the super admin uploads for a gym (the gym-host route signs only the host's gym). */
-export const brandingSignatureBody = z.object({ purpose: z.enum(['gym_logo', 'gym_icon']) });
+export const brandingSignatureBody = z.object({
+  purpose: z.enum(['gym_logo', 'gym_icon', 'gym_cover']),
+});
 
 export const impersonateBody = z.object({
   /** Why you need the owner's view, e.g. a support ticket number. Required and audited. */

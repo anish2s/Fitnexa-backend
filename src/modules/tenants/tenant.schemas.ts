@@ -50,6 +50,7 @@ export const nonEmpty = <T extends z.ZodRawShape>(shape: T) =>
 export const brandingShape = {
   logoUrl: httpsUrl.nullable().optional(),
   appIconUrl: httpsUrl.nullable().optional(),
+  coverImageUrl: httpsUrl.nullable().optional(),
   primaryColor: hexColor.optional(),
   secondaryColor: hexColor.optional(),
   defaultTheme: z.enum(['dark', 'light', 'system']).optional(),

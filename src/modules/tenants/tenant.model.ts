@@ -16,6 +16,8 @@ const brandingSchema = new Schema(
   {
     logoUrl: { type: String, trim: true, maxlength: 500 },
     appIconUrl: { type: String, trim: true, maxlength: 500 },
+    /** Member-app hero photo (our Cloudinary upload; PNG/JPG/WebP, ≤ 5 MB). */
+    coverImageUrl: { type: String, trim: true, maxlength: 500 },
     primaryColor: { type: String, match: HEX_COLOR, default: '#7C3AED' },
     secondaryColor: { type: String, match: HEX_COLOR, default: '#0F172A' },
     /** Default theme for this gym's users; each user can still override it. */
@@ -119,6 +121,7 @@ export function toPublicBranding(t: TenantAttrs & { _id?: unknown }) {
     slug: t.slug,
     logoUrl: t.branding?.logoUrl ?? null,
     appIconUrl: t.branding?.appIconUrl ?? null,
+    coverImageUrl: t.branding?.coverImageUrl ?? null,
     primaryColor: t.branding?.primaryColor ?? '#7C3AED',
     secondaryColor: t.branding?.secondaryColor ?? '#0F172A',
     defaultTheme: t.branding?.defaultTheme ?? 'dark',
