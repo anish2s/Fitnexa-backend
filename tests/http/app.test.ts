@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { buildTestApp } from '../helpers/app.js';
+import { buildTestApp, testEnv } from '../helpers/app.js';
 
 const app = buildTestApp();
 
@@ -218,6 +218,32 @@ describe('CORS', () => {
 });
 
 describe('rate limiting', () => {
+  // The production default, not a test override: one visitor gets 300 requests a minute, then 429.
+  // (The dashboard's e2e run sets its own higher limit, because all its browsers share one IP.)
+  it('a normal visitor gets 429 past the default 300 requests per minute', async () => {
+    const saved = { max: process.env.RATE_LIMIT_MAX, win: process.env.RATE_LIMIT_WINDOW_MS };
+    delete process.env.RATE_LIMIT_MAX;
+    delete process.env.RATE_LIMIT_WINDOW_MS;
+    try {
+      const env = testEnv();
+      expect([env.RATE_LIMIT_MAX, env.RATE_LIMIT_WINDOW_MS]).toEqual([300, 60_000]);
+      const app = buildTestApp();
+      const hit = () =>
+        request(app).get('/api/v1/public/tenant').set('Host', 'powerhouse.localhost');
+      for (let i = 1; i <= 300; i++) {
+        const res = await hit();
+        if (res.status !== 200) throw new Error(`request ${i} answered ${res.status}`);
+      }
+      const res = await hit();
+      expect(res.status).toBe(429);
+      expect(res.body.error.code).toBe('RATE_LIMITED');
+      expect(res.headers['retry-after']).toBeDefined();
+    } finally {
+      if (saved.max !== undefined) process.env.RATE_LIMIT_MAX = saved.max;
+      if (saved.win !== undefined) process.env.RATE_LIMIT_WINDOW_MS = saved.win;
+    }
+  });
+
   it('returns 429 with the standard envelope past the limit', async () => {
     const limited = buildTestApp({ env: { RATE_LIMIT_MAX: '2' } });
     const hit = () =>

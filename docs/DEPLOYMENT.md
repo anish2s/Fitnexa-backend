@@ -97,6 +97,9 @@ Optional at boot: without credentials, upload endpoints return `503 UPLOADS_NOT_
 2. Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (all three) and
    `CLOUDINARY_FOLDER=fitexaa-prod` (dev defaults to `fitexaa-dev`, so the two never mix).
 No upload preset or CORS setup is needed: uploads are signed per request.
+Leave `CLOUDINARY_API_URL` unset in production (it refuses any value but `https://api.cloudinary.com`).
+It exists for the dashboard's e2e run, which points the API's own Cloudinary calls (resource lookups,
+deletes) at a local mock with fake credentials, so test runs never touch a real account.
 
 ## Online payments (Razorpay)
 Optional; desk payments never need it.

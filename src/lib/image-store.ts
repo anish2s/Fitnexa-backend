@@ -48,6 +48,9 @@ export type ImageKind = 'logo' | 'icon' | 'member_photo';
 
 export const ALLOWED_FORMATS = 'jpg,jpeg,png,webp';
 
+/** Cloudinary's public API: browsers upload here, and the server calls it unless tests say otherwise. */
+export const CLOUDINARY_API_URL = 'https://api.cloudinary.com';
+
 /** Delivery transformations: resized and auto-format on the CDN, not stored at full size. */
 const DELIVERY: Record<ImageKind, string> = {
   logo: 'c_limit,w_512,h_512,f_auto,q_auto',
@@ -76,12 +79,19 @@ export function cloudinaryImageStore(opts: {
   apiSecret: string;
   folder: string;
   logger: Logger;
+  /**
+   * Where THIS server calls Cloudinary (resource lookups, deletes). Default: the real API. Only the
+   * e2e/test setup changes it, to a local mock; production refuses anything else (config/env.ts).
+   * Browser uploads always go to the public Cloudinary API, which the dashboard's CSP allows.
+   */
+  apiUrl?: string;
   fetch?: typeof fetch;
   now?: () => Date;
 }): ImageStore {
   const doFetch = opts.fetch ?? fetch;
   const now = opts.now ?? (() => new Date());
-  const base = `https://api.cloudinary.com/v1_1/${opts.cloudName}/image`;
+  const uploadBase = `${CLOUDINARY_API_URL}/v1_1/${opts.cloudName}/image`;
+  const serverApi = `${(opts.apiUrl ?? CLOUDINARY_API_URL).replace(/\/+$/, '')}/v1_1/${opts.cloudName}`;
 
   const deliveryUrl = (publicId: string, kind: ImageKind) =>
     `https://res.cloudinary.com/${opts.cloudName}/image/upload/${DELIVERY[kind]}/${publicId}`;
@@ -102,15 +112,12 @@ export function cloudinaryImageStore(opts: {
     },
 
     async inspect(publicId) {
-      const res = await doFetch(
-        `${base.replace(/\/image$/, '')}/resources/image/upload/${publicId}`,
-        {
-          headers: {
-            authorization: `Basic ${Buffer.from(`${opts.apiKey}:${opts.apiSecret}`).toString('base64')}`,
-          },
-          signal: AbortSignal.timeout(10_000),
+      const res = await doFetch(`${serverApi}/resources/image/upload/${publicId}`, {
+        headers: {
+          authorization: `Basic ${Buffer.from(`${opts.apiKey}:${opts.apiSecret}`).toString('base64')}`,
         },
-      );
+        signal: AbortSignal.timeout(10_000),
+      });
       if (res.status === 404) return null;
       if (!res.ok) throw new Error(`Cloudinary resource lookup failed (${res.status})`);
       const r = (await res.json()) as Partial<StoredImage>;
@@ -132,7 +139,7 @@ export function cloudinaryImageStore(opts: {
         timestamp,
       };
       return {
-        uploadUrl: `${base}/upload`,
+        uploadUrl: `${uploadBase}/upload`,
         fields: {
           ...signed,
           api_key: opts.apiKey,
@@ -148,7 +155,7 @@ export function cloudinaryImageStore(opts: {
       const timestamp = String(Math.floor(now().getTime() / 1000));
       const signed = { invalidate: 'true', public_id: publicId, timestamp };
       try {
-        const res = await doFetch(`${base}/destroy`, {
+        const res = await doFetch(`${serverApi}/image/destroy`, {
           method: 'POST',
           body: new URLSearchParams({
             ...signed,
@@ -181,6 +188,7 @@ export function createImageStore(env: Env, logger: Logger): ImageStore | null {
     apiKey: env.CLOUDINARY_API_KEY,
     apiSecret: env.CLOUDINARY_API_SECRET,
     folder: env.CLOUDINARY_FOLDER,
+    apiUrl: env.CLOUDINARY_API_URL,
     logger,
   });
 }

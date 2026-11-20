@@ -96,6 +96,68 @@ describe('cloudinary destroy', () => {
   });
 });
 
+describe('cloudinary server API address (tests point it at a local mock)', () => {
+  it('server calls go to CLOUDINARY_API_URL; browser uploads always go to the public API', async () => {
+    const f = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ result: 'ok', format: 'PNG', bytes: 9, width: 2, height: 2 }),
+        ),
+    );
+    const s = cloudinaryImageStore({
+      cloudName: 'e2e-mock',
+      apiKey: '123456',
+      apiSecret: 'e2e-mock-secret-not-real',
+      folder: 'fitexaa-e2e',
+      apiUrl: 'http://127.0.0.1:4180/',
+      logger,
+      fetch: f as unknown as typeof fetch,
+      now: () => NOW,
+    });
+    expect(s.signUpload('fitexaa-e2e/gyms/g1/branding/icon-x', 'icon').uploadUrl).toBe(
+      'https://api.cloudinary.com/v1_1/e2e-mock/image/upload',
+    );
+    expect(await s.inspect('fitexaa-e2e/gyms/g1/branding/icon-x')).toEqual({
+      format: 'png',
+      bytes: 9,
+      width: 2,
+      height: 2,
+    });
+    await s.destroy('fitexaa-e2e/gyms/g1/branding/icon-x');
+    const urls = f.mock.calls.map((c) => (c as unknown as [string])[0]);
+    expect(urls).toEqual([
+      'http://127.0.0.1:4180/v1_1/e2e-mock/resources/image/upload/fitexaa-e2e/gyms/g1/branding/icon-x',
+      'http://127.0.0.1:4180/v1_1/e2e-mock/image/destroy',
+    ]);
+  });
+
+  it('defaults to the real API and production refuses anything else', () => {
+    const base = {
+      MONGODB_URI: 'mongodb://x/y',
+      BASE_DOMAINS: 'yourapp.in',
+      JWT_ACCESS_SECRET: 'x'.repeat(48),
+    };
+    expect(parseEnv(base).CLOUDINARY_API_URL).toBe('https://api.cloudinary.com');
+    expect(
+      parseEnv({ ...base, CLOUDINARY_API_URL: 'http://127.0.0.1:4180/' }).CLOUDINARY_API_URL,
+    ).toBe('http://127.0.0.1:4180');
+    const prod = {
+      ...base,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://*.yourapp.in',
+      GYM_APP_URL_TEMPLATE: 'https://{slug}.yourapp.in',
+      MAIL_TRANSPORT: 'resend',
+      RESEND_API_KEY: 're_test_12345678',
+      MAIL_FROM: 'Gym <no-reply@yourapp.in>',
+      TRUST_PROXY: 'uniquelocal',
+    };
+    expect(parseEnv(prod).CLOUDINARY_API_URL).toBe('https://api.cloudinary.com');
+    expect(() => parseEnv({ ...prod, CLOUDINARY_API_URL: 'http://127.0.0.1:4180' })).toThrow(
+      /CLOUDINARY_API_URL/,
+    );
+  });
+});
+
 describe('cloudinary config', () => {
   const base = {
     MONGODB_URI: 'mongodb://x/y',

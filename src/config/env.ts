@@ -219,6 +219,17 @@ export const envSchema = z
       .trim()
       .regex(/^[a-z0-9_-]{1,40}$/, 'Lowercase letters, digits, _ and - only')
       .default('fitexaa-dev'),
+    /**
+     * Where this server calls Cloudinary (resource lookups, deletes). Tests only: the dashboard's e2e
+     * setup points it at a local mock so test runs never touch a real account. Production refuses
+     * anything but the real API. Browser uploads always go to https://api.cloudinary.com.
+     */
+    CLOUDINARY_API_URL: z
+      .string()
+      .trim()
+      .url()
+      .transform((u) => u.replace(/\/+$/, ''))
+      .default('https://api.cloudinary.com'),
   })
   .transform((env) => ({
     ...env,
@@ -274,6 +285,13 @@ export const envSchema = z
         code: 'custom',
         path: ['CLOUDINARY_API_SECRET'],
         message: 'Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET together',
+      });
+    }
+    if (env.NODE_ENV === 'production' && env.CLOUDINARY_API_URL !== 'https://api.cloudinary.com') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CLOUDINARY_API_URL'],
+        message: 'CLOUDINARY_API_URL is for tests only; production uses https://api.cloudinary.com',
       });
     }
     if (env.MAIL_TRANSPORT === 'resend' && /@localhost\b/i.test(env.MAIL_FROM)) {
