@@ -112,3 +112,36 @@ describe('staff addresses (STAFF_BASE_DOMAINS)', () => {
     expect(siteKindOf(r('powerhouse.localhost'), false)).toBe('any');
   });
 });
+
+describe("owner's layout (2026-11-20): members on <gym>.pwa.<domain>, staff on the main <gym>.<domain>", () => {
+  // BASE_DOMAINS = the member addresses, STAFF_BASE_DOMAINS = the staff (main) addresses.
+  const MEMBER = ['pwa.yourapp.in', 'pwa.localhost'];
+  const STAFF = ['yourapp.in', 'localhost'];
+  const RES = ['www', 'api', 'app', 'admin', 'platform', 'pwa', 'staff'];
+  const rl = (h: string) => resolveHost(h, MEMBER, RES, STAFF);
+
+  it('the member app is <gym>.pwa.<domain>; the staff dashboard keeps <gym>.<domain>', () => {
+    expect(rl('powerhouse.pwa.yourapp.in')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'gym',
+    });
+    expect(siteKindOf(rl('powerhouse.pwa.yourapp.in'), true)).toBe('member');
+    expect(rl('powerhouse.yourapp.in')).toEqual({
+      kind: 'subdomain',
+      slug: 'powerhouse',
+      base: 'staff',
+    });
+    expect(siteKindOf(rl('powerhouse.yourapp.in'), true)).toBe('staff');
+    expect(siteKindOf(rl('powerhouse.pwa.localhost:3005'), true)).toBe('member');
+    expect(siteKindOf(rl('powerhouse.localhost:3001'), true)).toBe('staff');
+  });
+
+  it('the platform console and the bare names are the platform; "pwa" can never be a gym', () => {
+    expect(rl('admin.yourapp.in')).toEqual({ kind: 'platform' });
+    expect(rl('admin.localhost')).toEqual({ kind: 'platform' });
+    expect(rl('yourapp.in')).toEqual({ kind: 'platform' });
+    expect(rl('pwa.yourapp.in')).toEqual({ kind: 'platform' });
+    expect(rl('a.powerhouse.pwa.yourapp.in')).toEqual({ kind: 'invalid' });
+  });
+});

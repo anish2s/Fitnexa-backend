@@ -61,6 +61,28 @@ describe('parseEnv', () => {
     expect(parseEnv({ ...prod, TRUST_PROXY: 'uniquelocal' }).TRUST_PROXY).toEqual(['uniquelocal']);
   });
 
+  it("accepts the owner's production layout: members on <gym>.pwa.<domain>, staff on <gym>.<domain>", () => {
+    const env = parseEnv({
+      ...base,
+      NODE_ENV: 'production',
+      BASE_DOMAINS: 'pwa.yourapp.in',
+      STAFF_BASE_DOMAINS: 'yourapp.in',
+      GYM_APP_URL_TEMPLATE: 'https://{slug}.pwa.yourapp.in',
+      STAFF_APP_URL_TEMPLATE: 'https://{slug}.yourapp.in',
+      CORS_ORIGINS: 'https://*.yourapp.in,https://*.pwa.yourapp.in',
+      TRUST_PROXY: 'uniquelocal',
+      MAIL_TRANSPORT: 'resend',
+      RESEND_API_KEY: 're_test_12345678',
+      MAIL_FROM: 'Gym <no-reply@yourapp.in>',
+    });
+    expect([env.BASE_DOMAINS, env.STAFF_BASE_DOMAINS]).toEqual([
+      ['pwa.yourapp.in'],
+      ['yourapp.in'],
+    ]);
+    // Neither "pwa" nor "staff" can ever be a gym's subdomain.
+    expect(env.RESERVED_SUBDOMAINS).toEqual(expect.arrayContaining(['pwa', 'staff', 'admin']));
+  });
+
   it('requires a long JWT secret', () => {
     expect(() => parseEnv({ ...base, JWT_ACCESS_SECRET: 'short' })).toThrow(/JWT_ACCESS_SECRET/);
   });

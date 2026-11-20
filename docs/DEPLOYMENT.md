@@ -38,18 +38,28 @@ Without a forwarded IP every visitor would share the Next.js server's single rat
 (300 requests/min), so a busy gym would lock everyone out: don't "fix" that by raising the limit.
 
 ### Member and staff addresses (Phase 3)
-Members use the gym's main address (`https://<gym>.yourapp.in`, the member app); owners and staff use
-a separate staff address served by the dashboard. The staff domain is not decided yet, so it is a
-setting (see docs/API.md, "Member and staff addresses"):
+**Owner's decision (2026-11-20):** members use **`https://<gym>.pwa.yourapp.in`** (the member app);
+owners and staff keep the gym's main address **`https://<gym>.yourapp.in`** (the dashboard); the platform
+console stays on `https://admin.yourapp.in`. (Names in the settings are historical: `BASE_DOMAINS` are
+the member addresses, `STAFF_BASE_DOMAINS` the staff ones; the longest matching domain wins, so
+`<gym>.pwa.yourapp.in` is the member site even though it also ends in `yourapp.in`.)
 
-| Variable | Example | Notes |
+| Variable | Production | Local development |
 |---|---|---|
-| `STAFF_BASE_DOMAINS` | `staff.yourapp.in` (locally `staff.localhost`) | `<gym>.<staff base>` is the same gym's staff site. Empty = no split: the main address serves everyone (as before). Must not repeat a `BASE_DOMAINS` entry. With it set, members are refused on staff sites and staff on member sites (`403 WRONG_SITE`). |
-| `STAFF_APP_URL_TEMPLATE` | `https://{slug}.staff.yourapp.in` | Links in owner/staff emails (password reset, invites). Default: `GYM_APP_URL_TEMPLATE`. https in production. |
-| `GYM_APP_URL_TEMPLATE` | `https://{slug}.yourapp.in` | Member links: email sign-in, WhatsApp messages, renewal reminders. |
+| `BASE_DOMAINS` | `pwa.yourapp.in` | `pwa.localhost` |
+| `STAFF_BASE_DOMAINS` | `yourapp.in` | `localhost` |
+| `GYM_APP_URL_TEMPLATE` (member links: email sign-in, WhatsApp, reminders) | `https://{slug}.pwa.yourapp.in` | `http://{slug}.pwa.localhost:3005` |
+| `STAFF_APP_URL_TEMPLATE` (owner/staff links: password reset, invites) | `https://{slug}.yourapp.in` | `http://{slug}.localhost:3001` |
+| `CORS_ORIGINS` | `https://*.yourapp.in,https://*.pwa.yourapp.in` | as for the dev ports |
 
-Add the staff base to DNS/TLS (Cloudflare: a proxied wildcard for `*.staff.yourapp.in` needs a
-certificate covering that level) and to `CORS_ORIGINS` if a browser calls the API from it directly.
+- `STAFF_BASE_DOMAINS` empty = no split: one address serves everyone (Phase 2 behaviour). With it set,
+  members are refused on staff addresses and staff on member addresses (`403 WRONG_SITE`), and each app
+  answers only on its own addresses.
+- `pwa` and `staff` are reserved subdomains (as are `www`, `admin`, …): no gym can be named after them.
+- **TLS:** `*.pwa.yourapp.in` is a second-level wildcard. Cloudflare's free Universal SSL covers only
+  `yourapp.in` and `*.yourapp.in`, so the member addresses need a certificate for `*.pwa.yourapp.in`
+  (Cloudflare Advanced Certificate Manager, a paid add-on, or Total TLS). Order it before launch.
+- DNS: a proxied wildcard record `*.pwa` (and the existing `*`) pointing at the tunnel / origin.
 
 Development/e2e only: `MAIL_TRANSPORT=file` appends each email as a JSON line
 `{ at, kind, to, subject, text }` to `MAIL_FILE` (default `tmp/mail.jsonl`, relative to the backend

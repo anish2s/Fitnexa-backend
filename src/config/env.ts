@@ -85,7 +85,7 @@ export const envSchema = z
     /** Subdomains that never resolve to a gym (platform/admin surfaces). */
     RESERVED_SUBDOMAINS: z
       .string()
-      .default('www,api,app,admin,platform,static,assets,mail,status')
+      .default('www,api,app,admin,platform,static,assets,mail,status,pwa,staff')
       .transform(splitCsv),
 
     /** Browser origins allowed by CORS. Wildcards like https://*.yourapp.in are supported. */
