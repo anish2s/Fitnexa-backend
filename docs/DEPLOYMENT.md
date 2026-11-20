@@ -38,18 +38,20 @@ Without a forwarded IP every visitor would share the Next.js server's single rat
 (300 requests/min), so a busy gym would lock everyone out: don't "fix" that by raising the limit.
 
 ### Member and staff addresses (Phase 3)
-**Owner's decision (2026-11-20):** members use **`https://<gym>-pwa.yourapp.in`** (the member app);
-owners and staff keep the gym's main address **`https://<gym>.yourapp.in`** (the dashboard); the platform
-console stays on `https://admin.yourapp.in`. Both are one level under `yourapp.in`, so Cloudflare's free
-Universal SSL certificate (`*.yourapp.in`) covers them: no paid certificate needed.
+**Owner's decision (2026-11-20), domain `fitexaa.com`:** members use **`https://<gym>-pwa.fitexaa.com`**
+(the member app); owners and staff **`https://<gym>.fitexaa.com`** (the dashboard); the platform console
+`https://admin.fitexaa.com`; `fitexaa.com` is the public site. All one level under `fitexaa.com`, so the
+free Universal SSL certificate covers them. **This API is internal only:** reachable as
+`api.fitexaa.com` on the private network by the two app servers (`TRUST_PROXY` = their addresses),
+never published to the internet; browsers reach it only through `/api` on their own address.
 
 | Variable | Production | Local development |
 |---|---|---|
-| `BASE_DOMAINS` | `yourapp.in` | `localhost` |
+| `BASE_DOMAINS` | `fitexaa.com` | `localhost` |
 | `MEMBER_HOST_SUFFIX` | `-pwa` | `-pwa` |
-| `GYM_APP_URL_TEMPLATE` (member links: email sign-in, WhatsApp, reminders) | `https://{slug}-pwa.yourapp.in` | `http://{slug}-pwa.localhost:3005` |
-| `STAFF_APP_URL_TEMPLATE` (owner/staff links: password reset, invites) | `https://{slug}.yourapp.in` | `http://{slug}.localhost:3001` |
-| `CORS_ORIGINS` | `https://*.yourapp.in` | as for the dev ports |
+| `GYM_APP_URL_TEMPLATE` (member links: email sign-in, WhatsApp, reminders) | `https://{slug}-pwa.fitexaa.com` | `http://{slug}-pwa.localhost:3005` |
+| `STAFF_APP_URL_TEMPLATE` (owner/staff links: password reset, invites) | `https://{slug}.fitexaa.com` | `http://{slug}.localhost:3001` |
+| `CORS_ORIGINS` | `https://*.fitexaa.com` | as for the dev ports |
 
 - `MEMBER_HOST_SUFFIX` empty = no split: one address serves everyone (Phase 2 behaviour). With it set,
   `<gym>-pwa.<domain>` is the member site and `<gym>.<domain>` the staff site; members are refused on
