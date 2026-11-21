@@ -165,7 +165,7 @@ export function createAttendanceService(deps: { passes: PassSigner }) {
     return u.memberId;
   }
 
-  /** The member app's QR. Refresh at `refreshAt`; shows membership status alongside. */
+  /** The member app's QR. Refresh at `refreshAt`; shows membership status and the server's time alongside. */
   async function issuePass(userId: string) {
     const memberId = await memberIdOfUser(userId);
     const m = await Member.findOne({ _id: memberId, archivedAt: null })
@@ -181,6 +181,11 @@ export function createAttendanceService(deps: { passes: PassSigner }) {
       member: { name: m.name, memberCode: m.memberCode, photoUrl: m.photoUrl ?? null },
       membershipStatus: summary.status,
       checkedInToday: checkedInToday ? checkedInToday.checkedInAt : null,
+      /**
+       * The server's clock as the response leaves: the app compares refreshAt/validUntil against this
+       * (offset from the phone's clock), so a phone clock that is fast or slow doesn't hide a good code.
+       */
+      serverTime: new Date(),
     };
   }
 

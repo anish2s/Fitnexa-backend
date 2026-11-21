@@ -436,7 +436,7 @@ Checkout params: `{ keyId, orderId, amountPaise, currency: "INR", name, descript
 
 | Method & path | Who | Body / query | Result |
 |---|---|---|---|
-| `GET /members/me/pass` | member (`self:read`) | — | `{ token, refreshAt, validUntil, member{ name, memberCode, photoUrl }, membershipStatus, checkedInToday }` |
+| `GET /members/me/pass` | member (`self:read`) | — | `{ token, refreshAt, validUntil, member{ name, memberCode, photoUrl }, membershipStatus, checkedInToday, serverTime }` (`serverTime`: the server clock, so the app can correct for a fast or slow phone clock) |
 | `POST /attendance/scan` | `attendance:checkin` (owner, staff) | `{ token }` from the member's QR | check-in result |
 | `POST /attendance/manual` | `attendance:checkin` | `{ memberId }` | check-in result |
 | `GET /attendance` | `attendance:read` | `?date` (default today) `&page&limit` | that day's check-ins with `member`, newest first; `meta.date` |

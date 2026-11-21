@@ -46,8 +46,17 @@ describeWithDb('attendance (real MongoDB)', () => {
   // ---------------------------------------------------------------- QR flow
   it('member shows the pass, desk scans: checked in with photo, plan and dues; a second scan is a no-op', async () => {
     const me = await memberToken(PH, 'arjun@member.demo');
+    const before = Date.now();
     const pass = await call('get', PH, '/members/me/pass', me);
     expect(pass.status).toBe(200);
+    // The server's clock, so the app can correct for a phone clock that is fast or slow.
+    const serverTime = Date.parse(pass.body.data.serverTime);
+    expect(serverTime).toBeGreaterThanOrEqual(before);
+    expect(serverTime).toBeLessThanOrEqual(Date.now());
+    expect(Date.parse(pass.body.data.refreshAt)).toBeGreaterThan(serverTime);
+    expect(Date.parse(pass.body.data.validUntil)).toBeGreaterThan(
+      Date.parse(pass.body.data.refreshAt),
+    );
     expect(pass.headers['cache-control']).toBe('no-store');
     expect(pass.body.data).toMatchObject({
       member: { name: 'Arjun Sharma', memberCode: 'M0001' },
