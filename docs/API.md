@@ -150,7 +150,7 @@ platform host.
 | `POST /auth/password/reset` | — | `{ token, password }` | `204`. Also completes staff/owner **invites**. Ends all sessions. |
 | `POST /auth/password/change` | Bearer | `{ currentPassword, newPassword }` | `204`. Ends all *other* sessions. Not for members. |
 | `POST /auth/refresh` | cookie | — | new session + rotated cookie |
-| `POST /auth/logout` | cookie | — | `204`, cookie cleared, session ended |
+| `POST /auth/logout` | cookie | optional `{ everywhere: true }` | `204`, cookie cleared, session ended. With `everywhere`, a live (not impersonated) session also ends every other session of its user (audited as `auth.logout_all`): the member app completes a sign-out tapped offline with this call alone |
 | `POST /auth/logout-all` | Bearer | — | `204`, every device signed out |
 | `GET /auth/session` | cookie | — | `{ scope: "tenant"\|"platform", role }` for the refresh cookie, read-only (no rotation). Used by the web server to guard owner/platform pages before rendering; 401 `INVALID_REFRESH` otherwise |
 | `GET /auth/me` | Bearer | — | `{ user, scope: "tenant"|"platform", gym: { name, slug } | null, impersonatedBy: { id, name } | null }` |

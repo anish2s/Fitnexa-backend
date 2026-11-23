@@ -142,9 +142,19 @@ export function createAuthController(env: Env, auth: AuthService, audit: AuditSe
       ok(res, found);
     },
 
+    /** Body `{ everywhere: true }`: every session of this user ends too (see logoutByRefreshToken). */
     async logout(req: Request, res: Response) {
       const token = readRefreshCookie(req);
-      if (token) await auth.logoutByRefreshToken(scopeOf(req), token);
+      const everywhere = (req.body as { everywhere?: unknown } | undefined)?.everywhere === true;
+      const all = token
+        ? await auth.logoutByRefreshToken(scopeOf(req), token, { everywhere })
+        : null;
+      if (all) {
+        await audit.record(
+          { ...auditContextFrom(req), actor: { type: 'user', id: all.userId } },
+          { action: 'auth.logout_all' },
+        );
+      }
       clearCookie(res);
       noContent(res);
     },

@@ -366,6 +366,35 @@ describeWithDb('authentication (real MongoDB)', () => {
       expect((await me(PH, b)).status).toBe(401);
     });
 
+    it('logout { everywhere } with the refresh cookie alone ends every device (sign-out tapped offline)', async () => {
+      const first = await login(PH, 'owner@powerhouse.demo');
+      const cookie = refreshCookieOf(first)!;
+      const other = await login(PH, 'owner@powerhouse.demo');
+      await request(app)
+        .post('/api/v1/auth/logout')
+        .set('Host', PH)
+        .set('Cookie', `${COOKIE}=${cookie}`)
+        .send({ everywhere: true })
+        .expect(204);
+      expect((await me(PH, first.body.data.accessToken)).status).toBe(401);
+      expect((await me(PH, other.body.data.accessToken)).status).toBe(401);
+      expect((await refresh(PH, refreshCookieOf(other)!)).status).toBe(401);
+    });
+
+    it('logout { everywhere } with a cookie that is already signed out ends nothing else', async () => {
+      const first = await login(PH, 'owner@powerhouse.demo');
+      const cookie = refreshCookieOf(first)!;
+      const other = await login(PH, 'owner@powerhouse.demo');
+      const out = () =>
+        request(app)
+          .post('/api/v1/auth/logout')
+          .set('Host', PH)
+          .set('Cookie', `${COOKIE}=${cookie}`);
+      await out().expect(204);
+      await out().send({ everywhere: true }).expect(204);
+      expect((await me(PH, other.body.data.accessToken)).status).toBe(200);
+    });
+
     it('lists my sessions and lets me end one, but never someone else’s (IDOR)', async () => {
       const mine = (await login(PH, 'owner@powerhouse.demo')).body.data.accessToken;
       await login(PH, 'owner@powerhouse.demo');

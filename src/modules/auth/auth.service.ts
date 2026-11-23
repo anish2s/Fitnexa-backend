@@ -575,12 +575,29 @@ export function createAuthService(deps: {
   }
 
   /** Logout by refresh cookie (works even with an expired access token). Idempotent. */
-  async function logoutByRefreshToken(scope: AuthScope, refreshToken: string) {
-    if (!isWellFormedToken(refreshToken)) return;
-    await sessionModel(scope).updateOne(
-      { refreshTokenHash: hashToken(refreshToken), revokedAt: null },
-      { $set: { revokedAt: new Date(), revokedReason: 'logout' } },
-    );
+  /**
+   * Ends the session the refresh token belongs to. With `everywhere`, a live, non-impersonated session also
+   * ends every other session of its user: the member app's sign-out that was tapped offline completes with
+   * this call alone, without first signing in again (the token already proves the session). Returns the
+   * user whose sessions all ended, for the audit log; null otherwise.
+   */
+  async function logoutByRefreshToken(
+    scope: AuthScope,
+    refreshToken: string,
+    opts: { everywhere?: boolean } = {},
+  ): Promise<{ userId: string } | null> {
+    if (!isWellFormedToken(refreshToken)) return null;
+    const session = await sessionModel(scope)
+      .findOneAndUpdate(
+        { refreshTokenHash: hashToken(refreshToken), revokedAt: null },
+        { $set: { revokedAt: new Date(), revokedReason: 'logout' } },
+      )
+      .lean<{ userId: Types.ObjectId; expiresAt: Date; impersonatorId?: Types.ObjectId | null }>();
+    if (!opts.everywhere || !session || session.impersonatorId || session.expiresAt <= new Date()) {
+      return null;
+    }
+    await revokeUserSessions(scope, session.userId, 'logout_all');
+    return { userId: String(session.userId) };
   }
 
   async function logoutSession(scope: AuthScope, userId: string, sessionId: string) {
