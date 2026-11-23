@@ -263,6 +263,16 @@ export const envSchema = z
       .url()
       .transform((u) => u.replace(/\/+$/, ''))
       .default('https://api.cloudinary.com'),
+    /**
+     * Where this server calls Razorpay (orders, refunds). Tests only: the member app's e2e run points it
+     * at a local mock so no test touches Razorpay. Production refuses anything but the real API.
+     */
+    RAZORPAY_API_URL: z
+      .string()
+      .trim()
+      .url()
+      .transform((u) => u.replace(/\/+$/, ''))
+      .default('https://api.razorpay.com/v1'),
   })
   .transform((env) => ({
     ...env,
@@ -325,6 +335,13 @@ export const envSchema = z
         code: 'custom',
         path: ['CLOUDINARY_API_URL'],
         message: 'CLOUDINARY_API_URL is for tests only; production uses https://api.cloudinary.com',
+      });
+    }
+    if (env.NODE_ENV === 'production' && env.RAZORPAY_API_URL !== 'https://api.razorpay.com/v1') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['RAZORPAY_API_URL'],
+        message: 'RAZORPAY_API_URL is for tests only; production uses https://api.razorpay.com/v1',
       });
     }
     if (env.MAIL_TRANSPORT === 'resend' && /@localhost\b/i.test(env.MAIL_FROM)) {

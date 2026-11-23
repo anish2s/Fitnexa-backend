@@ -495,7 +495,22 @@ export function createMembershipService(deps: { audit: AuditService; env?: Env }
         nextStartDate: summary.nextStartDate,
       },
       items: rows.map(view),
+      onlinePayments: await onlinePaymentsReady(),
     };
+  }
+
+  /**
+   * Whether the member app can offer "Pay now": the server has its payments key and the gym has connected
+   * Razorpay. Read on every call (no cache), so it changes as soon as the owner connects or disconnects.
+   * If stored keys can't be decrypted the order request still fails cleanly (PAYMENT_GATEWAY_NOT_CONNECTED).
+   */
+  async function onlinePaymentsReady(): Promise<boolean> {
+    if (!deps.env?.PAYMENTS_ENCRYPTION_KEY) return false;
+    const t = await Tenant.findById(requireTenantId())
+      .select('razorpay.keyId +razorpay.keySecretEnc +razorpay.webhookSecretEnc')
+      .lean();
+    const r = t?.razorpay;
+    return Boolean(r?.keyId && r.keySecretEnc && r.webhookSecretEnc);
   }
 
   /** Attaches member names/codes/phones for gym-wide lists. */

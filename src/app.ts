@@ -202,7 +202,7 @@ export function createApp(deps: AppDeps) {
     env,
     audit,
     logger,
-    razorpay: deps.razorpay ?? httpRazorpayClient(),
+    razorpay: deps.razorpay ?? httpRazorpayClient({ baseUrl: env.RAZORPAY_API_URL }),
   });
   const gw = gatewayRouters({ jwt, gateway });
   const pay = paymentRouters({ jwt, audit, gateway });

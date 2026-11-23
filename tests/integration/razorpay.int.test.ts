@@ -263,6 +263,25 @@ describeWithDb('Razorpay (test mode, fake gateway, real MongoDB)', () => {
   });
 
   // ---------------------------------------------------------------- member self-pay
+  it('the member app knows whether online payments are available (onlinePayments)', async () => {
+    const me = await memberToken(PH, 'arjun@member.demo');
+    const flag = async () =>
+      (await call('get', PH, '/members/me/memberships', me)).body.data.onlinePayments;
+    expect(await flag()).toBe(false);
+    expect((await connect()).status).toBe(200);
+    expect(await flag()).toBe(true);
+    // Another gym's keys don't count.
+    const fz = await memberToken(FZ, 'arjun@member.demo');
+    expect((await call('get', FZ, '/members/me/memberships', fz)).body.data.onlinePayments).toBe(
+      false,
+    );
+    // Without the server's payments key nothing can be offered, whatever the gym stored.
+    const noKey = await noKeyApp.memberToken(PH, 'arjun@member.demo');
+    expect(
+      (await noKeyApp.call('get', PH, '/members/me/memberships', noKey)).body.data.onlinePayments,
+    ).toBe(false);
+  });
+
   it('a member pays their own balance from the app, and only their own', async () => {
     await connect();
     const me = await memberToken(PH, 'arjun@member.demo');

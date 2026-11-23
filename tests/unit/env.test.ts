@@ -32,6 +32,27 @@ describe('parseEnv', () => {
     ).toThrow(/ALLOW_TENANT_HEADER/);
   });
 
+  it('RAZORPAY_API_URL: the real API by default; another address (tests) is refused in production', () => {
+    expect(parseEnv(base).RAZORPAY_API_URL).toBe('https://api.razorpay.com/v1');
+    expect(
+      parseEnv({ ...base, RAZORPAY_API_URL: 'http://127.0.0.1:4181/v1/' }).RAZORPAY_API_URL,
+    ).toBe('http://127.0.0.1:4181/v1');
+    const prod = {
+      ...base,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://*.yourapp.in',
+      GYM_APP_URL_TEMPLATE: 'https://{slug}.yourapp.in',
+      MAIL_TRANSPORT: 'resend',
+      RESEND_API_KEY: 're_test_12345678',
+      MAIL_FROM: 'Gym <no-reply@yourapp.in>',
+      TRUST_PROXY: 'uniquelocal',
+    };
+    expect(parseEnv(prod).RAZORPAY_API_URL).toBe('https://api.razorpay.com/v1');
+    expect(() => parseEnv({ ...prod, RAZORPAY_API_URL: 'http://127.0.0.1:4181/v1' })).toThrow(
+      /RAZORPAY_API_URL/,
+    );
+  });
+
   it('requires explicit CORS origins in production', () => {
     expect(() => parseEnv({ ...base, NODE_ENV: 'production' })).toThrow(/CORS_ORIGINS/);
   });

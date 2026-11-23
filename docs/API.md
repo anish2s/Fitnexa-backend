@@ -328,7 +328,7 @@ Reading needs `memberships:read`, selling/renewing/cancelling `memberships:manag
 | `POST /memberships/:id/cancel` | `{ reason }` | membership. Only active/upcoming; `409` otherwise. |
 | `GET /memberships` | `?status=active|upcoming|expired|cancelled&planId&page&limit` | memberships with `member{ id, memberCode, name, phone, photoUrl, archived }`, soonest end first |
 | `GET /memberships/expiring` | `?days&page&limit` | active memberships ending within `days` (default: gym's `renewalReminderDays`), whose member hasn't renewed and isn't archived. `meta.until`. |
-| `GET /members/me/memberships` | `self:read` (member) | own `{ summary, items[] }`, without notes/staff fields; each `plan` also has `description` (the plan's current free text, one item per line, or `null`) |
+| `GET /members/me/memberships` | `self:read` (member) | own `{ summary, items[] }`, without notes/staff fields; each `plan` also has `description` (the plan's current free text, one item per line, or `null`); `onlinePayments`: whether the app can offer "Pay now" (server payments key set and the gym has connected Razorpay) |
 
 Membership: `{ id, memberId, plan{ id, name, duration, months, pricePaise, taxMode, gstRate }, discountPaise,
 basePaise, gstPaise, totalPaise, startDate, endDate, kind: new|renewal, status, daysLeft, cancelledAt,

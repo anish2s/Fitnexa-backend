@@ -40,7 +40,7 @@ export async function connectRazorpay(
     env,
     logger,
     audit: createAuditService({ logger }),
-    razorpay: httpRazorpayClient(),
+    razorpay: httpRazorpayClient({ baseUrl: env.RAZORPAY_API_URL }),
   });
   try {
     return await runInTenant(gym._id, () =>
